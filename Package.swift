@@ -21,6 +21,8 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.0.0"),
         .package(url: "https://github.com/swift-server/async-http-client", from: "1.20.0"),
+        // Add AVFoundation related dependencies for voice capabilities
+        .package(url: "https://github.com/Alamofire/Alamofire.git", from: "5.8.1"), // For network requests
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -30,6 +32,7 @@ let package = Package(
             dependencies: [
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "AsyncHTTPClient", package: "async-http-client"),
+                .product(name: "Alamofire", package: "Alamofire"),
             ]),
         .executableTarget(
             name: "SimpleApp",

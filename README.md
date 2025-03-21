@@ -162,3 +162,72 @@ Contributions are welcome! Feel free to open issues or submit pull requests.
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Voice Agent Functionality
+
+AgentSDK-Swift now includes voice agent capabilities, allowing you to create agents that can process spoken input and generate spoken responses. This is similar to the OpenAI Agents Python SDK voice capabilities.
+
+### Voice Pipeline
+
+The voice pipeline processes audio through three main steps:
+
+1. **Speech-to-Text**: Converts user's speech to text using services like OpenAI Whisper
+2. **Agent Processing**: Processes the text with an agent to generate a response
+3. **Text-to-Speech**: Converts the agent's response back to speech
+
+### Available Components
+
+- **VoicePipeline**: Orchestrates the entire voice processing workflow
+- **SpeechToTextService**: Interface for speech recognition with OpenAI Whisper implementation
+- **TextToSpeechService**: Interface for speech synthesis with OpenAI TTS implementation
+- **VoiceAgent**: Combines the agent with voice processing capabilities
+
+### Example Usage
+
+```swift
+// Create a regular agent with instructions
+let agent = Agent<Void>(
+    name: "Voice Assistant",
+    instructions: "You are a helpful voice assistant. Keep responses concise and conversational."
+)
+
+// Add tools to the agent if needed
+agent.addTool(/* your tool definition */)
+
+// Create a voice pipeline using OpenAI services
+let pipeline = VoicePipeline(
+    openAIApiKey: "your-api-key",
+    agent: agent
+)
+
+// Process audio input
+let audioData: Data = /* your audio data */
+let result = try await pipeline.process(
+    audioData: audioData,
+    context: yourContext
+)
+
+// Access the results
+print("Transcription: \(result.inputTranscription)")
+print("Agent response: \(result.agentResponse)")
+
+// Play the audio response
+playAudio(result.audioResponse)
+
+// Or use streaming mode for more responsive interactions
+try await pipeline.processStreamed(
+    audioData: audioData,
+    context: yourContext
+) { audioChunk in
+    // Play each chunk of audio as it's generated
+    playAudio(audioChunk)
+}
+```
+
+### Requirements
+
+- iOS 16+ or macOS 13+
+- OpenAI API key with access to Whisper and TTS models
+- AVFoundation for audio recording and playback
+
+See the `Examples/VoiceAgentExample.swift` file for a complete example of how to use the voice agent functionality.
