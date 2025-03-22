@@ -44,20 +44,23 @@ public class OpenAITTSService: TextToSpeechService {
             "Content-Type": "application/json"
         ]
         
-        let parameters: [String: Any] = [
+        // Create your JSON data manually
+        let requestDict = [
             "model": model,
             "input": text,
             "voice": voice
         ]
+        let jsonData = try JSONSerialization.data(withJSONObject: requestDict)
         
         return try await withCheckedThrowingContinuation { continuation in
             AF.request(
                 baseURL,
                 method: .post,
-                parameters: parameters,
-                encoding: JSONEncoding.default,
                 headers: headers
-            )
+            ) { urlRequest in
+                urlRequest.httpBody = jsonData
+                urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            }
             .validate()
             .responseData { response in
                 switch response.result {
@@ -130,10 +133,10 @@ public class AppleTTSService: TextToSpeechService {
     }
     
     /// Private delegate to handle speech synthesizer events
-    private class SpeechDelegate: NSObject, AVSpeechSynthesizerDelegate {
-        private let completionHandler: () -> Void
+    private class SpeechDelegate: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable {
+        private let completionHandler: @Sendable () -> Void
         
-        init(completionHandler: @escaping () -> Void) {
+        init(completionHandler: @escaping @Sendable () -> Void) {
             self.completionHandler = completionHandler
             super.init()
         }

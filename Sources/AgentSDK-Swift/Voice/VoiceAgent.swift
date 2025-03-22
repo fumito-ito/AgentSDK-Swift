@@ -107,7 +107,7 @@ public class VoiceAgent<Context> {
                         progressHandler?(.generatingSpeech(completeText))
                         
                         // 3. Convert the text chunk to speech
-                        if let audioChunk = try? await textToSpeechService.synthesize(text: completeText + ".") {
+                        if let audioChunk = try? await self.textToSpeechService.synthesize(text: completeText + ".") {
                             // Send the audio chunk to the handler
                             await audioChunkHandler(audioChunk)
                         }
@@ -170,7 +170,7 @@ public class VoiceAgent<Context> {
         }
         
         // Create a task for the recording process
-        let recordingTask = Task {
+        let recordingTask = Task { @Sendable in
             // Wait for some condition to stop recording
             // For example, silence detection, maximum duration, etc.
             try await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds timeout
@@ -196,13 +196,13 @@ public enum VoiceProgress {
 }
 
 /// Type alias for voice progress handler
-public typealias VoiceProgressHandler = (VoiceProgress) -> Void
+public typealias VoiceProgressHandler = @Sendable (VoiceProgress) -> Void
 
 /// Simple AVAudioRecorderDelegate implementation
-private class AVAudioRecorderDelegate: NSObject, AVFoundation.AVAudioRecorderDelegate {
-    private let finishedRecording: (Bool) -> Void
+private class AVAudioRecorderDelegate: NSObject, AVFoundation.AVAudioRecorderDelegate, @unchecked Sendable {
+    private let finishedRecording: @Sendable (Bool) -> Void
     
-    init(finishedRecording: @escaping (Bool) -> Void) {
+    init(finishedRecording: @escaping @Sendable (Bool) -> Void) {
         self.finishedRecording = finishedRecording
         super.init()
     }

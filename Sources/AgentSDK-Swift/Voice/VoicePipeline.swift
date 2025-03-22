@@ -1,8 +1,11 @@
 import Foundation
 import AVFoundation
 
+/// Type alias for voice pipeline result handler
+public typealias VoicePipelineResultHandler = @Sendable (Result<VoicePipelineResult, Error>) -> Void
+
 /// A pipeline for processing voice input through an agent and generating voice output
-public class VoicePipeline<Context> {
+public class VoicePipeline<Context: Sendable>: @unchecked Sendable {
     /// The speech-to-text service for transcribing user audio
     private let speechToTextService: SpeechToTextService
     
@@ -115,7 +118,7 @@ public class VoicePipeline<Context> {
         audioData: Data,
         context: Context,
         progressHandler: VoiceProgressHandler? = nil,
-        audioChunkHandler: @escaping (Data) async -> Void
+        audioChunkHandler: @escaping @Sendable (Data) async -> Void
     ) async throws -> VoicePipelineResult {
         let startTime = Date()
         
@@ -155,7 +158,7 @@ public class VoicePipeline<Context> {
                         progressHandler?(.generatingSpeech(completeText))
                         
                         do {
-                            let audioChunk = try await textToSpeechService.synthesize(text: completeText + ".")
+                            let audioChunk = try await self.textToSpeechService.synthesize(text: completeText + ".")
                             await audioChunkHandler(audioChunk)
                         } catch {
                             // Continue even if TTS fails for a chunk
@@ -179,7 +182,7 @@ public class VoicePipeline<Context> {
             progressHandler?(.generatingSpeech(textBuffer))
             
             do {
-                let finalAudioChunk = try await textToSpeechService.synthesize(text: textBuffer)
+                let finalAudioChunk = try await self.textToSpeechService.synthesize(text: textBuffer)
                 await audioChunkHandler(finalAudioChunk)
                 
                 // Add to final output
@@ -200,7 +203,7 @@ public class VoicePipeline<Context> {
         )
         
         // Create complete audio response (this would ideally be cached during streaming)
-        let completeAudioResponse = try await textToSpeechService.synthesize(text: finalOutput)
+        let completeAudioResponse = try await self.textToSpeechService.synthesize(text: finalOutput)
         
         return VoicePipelineResult(
             inputTranscription: transcription,
@@ -220,13 +223,18 @@ public class VoicePipeline<Context> {
     public func listen(
         context: Context,
         progressHandler: VoiceProgressHandler? = nil,
-        audioCompletionHandler: @escaping (Result<VoicePipelineResult, Error>) -> Void
+        audioCompletionHandler: @escaping VoicePipelineResultHandler
     ) -> Task<Void, Error> {
-        return Task {
+        // Capture the necessary values before starting the task
+        let capturedContext = context
+        
+        return Task { @Sendable [weak self] in
+            guard let self = self else { return }
+            
             do {
                 // Configure audio session
-                try audioSession.setCategory(.playAndRecord, mode: .default)
-                try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+                try self.audioSession.setCategory(.playAndRecord, mode: .default)
+                try self.audioSession.setActive(true, options: .notifyOthersOnDeactivation)
                 
                 // Create audio recorder
                 let recordingURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("recording.wav")
@@ -254,9 +262,9 @@ public class VoicePipeline<Context> {
                 }
                 
                 // Process the audio through the pipeline
-                let result = try await process(
+                let result = try await self.process(
                     audioData: audioData,
-                    context: context,
+                    context: capturedContext,
                     progressHandler: progressHandler
                 )
                 
