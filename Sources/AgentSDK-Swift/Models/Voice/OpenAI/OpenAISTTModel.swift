@@ -7,7 +7,7 @@ import NIOCore
 #endif
 
 /// Default turn detection settings
-public let DEFAULT_TURN_DETECTION: [String: Any] = ["type": "semantic_vad"]
+public let DEFAULT_TURN_DETECTION: [String: String] = ["type": "semantic_vad"]
 
 /// OpenAI speech-to-text model
 public class OpenAISTTModel: STTModel {
@@ -60,7 +60,7 @@ public class OpenAISTTModel: STTModel {
 }
 
 /// Request for the OpenAI transcription endpoint
-struct TranscriptionRequest: Encodable {
+public struct TranscriptionRequest: Encodable {
     /// The audio file to transcribe
     let file: Data
     
@@ -78,7 +78,7 @@ struct TranscriptionRequest: Encodable {
 }
 
 /// Response from the OpenAI transcription endpoint
-struct TranscriptionResponse: Decodable {
+public struct TranscriptionResponse: Decodable {
     /// The transcribed text
     let text: String
 }

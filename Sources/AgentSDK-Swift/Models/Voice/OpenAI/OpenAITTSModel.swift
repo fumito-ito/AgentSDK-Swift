@@ -54,7 +54,7 @@ public class OpenAITTSModel: TTSModel {
 }
 
 /// Request for the OpenAI speech endpoint
-struct SpeechRequest: Encodable {
+public struct SpeechRequest: Encodable {
     /// The model to use
     let model: String
     

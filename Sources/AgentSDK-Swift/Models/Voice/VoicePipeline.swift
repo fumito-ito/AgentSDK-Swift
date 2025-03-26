@@ -133,7 +133,9 @@ public class VoicePipeline {
                 }
             } catch {
                 print("Error processing turns: \(error)")
-            } finally {
+            }
+
+            do {
                 try? await transcriptionSession.close()
                 try? await output.done()
             }

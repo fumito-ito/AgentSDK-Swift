@@ -9,16 +9,16 @@ public protocol VoiceWorkflow {
 }
 
 /// A simple voice workflow that runs a single agent
-public class SingleAgentVoiceWorkflow: VoiceWorkflow {
+public class SingleAgentVoiceWorkflow<Context>: VoiceWorkflow {
     /// The agent to run
-    private let agent: Agent
+    private let agent: Agent<Context>
     
     /// Input history of the conversation
     private var inputHistory: [ResponseInputItem] = []
     
     /// Create a new single agent voice workflow
     /// - Parameter agent: The agent to run
-    public init(agent: Agent) {
+    public init(agent: Agent<Context>) {
         self.agent = agent
     }
     
