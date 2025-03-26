@@ -14,6 +14,7 @@ A Swift implementation of the OpenAI Agents SDK, allowing you to build AI agent 
 - 🛡️ Apply guardrails to ensure safe and high-quality outputs
 - 📊 Stream responses in real-time
 - 📝 Support for OpenAI's latest models 
+- 🔊 Voice agent support with speech-to-text and text-to-speech
 
 ## Requirements
 
@@ -84,6 +85,47 @@ Task {
 
 ## Advanced Usage
 
+### Voice Agents
+
+```swift
+import AgentSDK_Swift
+
+// Create a simple agent
+let agent = Agent(
+    modelSettings: ModelSettings(
+        provider: .openAI,
+        model: "gpt-4o",
+        apiKey: "your-api-key-here"
+    ),
+    systemPrompt: "You are a helpful voice assistant."
+)
+
+// Create a voice agent
+let voiceAgent = VoiceAgent(
+    apiKey: "your-api-key-here",
+    agent: agent,
+    sttModelName: "gpt-4o-transcribe",
+    ttsModelName: "gpt-4o-mini-tts"
+)
+
+// Process audio input
+let audioInput = AudioInput(buffer: audioData)
+let result = try await voiceAgent.process(audioInput: audioInput)
+
+// Stream the results
+for try await event in result.stream() {
+    switch event {
+    case .audio(let data):
+        // Play the audio data
+        playAudio(data)
+    case .lifecycle(let event):
+        print("Lifecycle event: \(event.rawValue)")
+    case .error(let error):
+        print("Error: \(error)")
+    }
+}
+```
+
 ### Using Guardrails
 
 ```swift
@@ -139,9 +181,11 @@ let result = try await AgentRunner.runStreamed(
 }
 ```
 
-## Running the Example
+## Running the Examples
 
-The project includes a simple example application that demonstrates how to use the SDK:
+The project includes example applications that demonstrate how to use the SDK:
+
+### Simple Text-based Agent
 
 ```bash
 # Set your OpenAI API key
@@ -149,6 +193,16 @@ export OPENAI_API_KEY=your_api_key_here
 
 # Run the example
 swift run SimpleApp
+```
+
+### Voice Agent Example
+
+```bash
+# Set your OpenAI API key
+export OPENAI_API_KEY=your_api_key_here
+
+# Run the voice agent example
+swift run VoiceAgentExample
 ```
 
 ## Documentation
