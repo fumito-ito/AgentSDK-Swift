@@ -11,9 +11,14 @@ import Testing
     )
     
     #expect(agent.name == "TestAgent")
-    #expect(agent.instructions == "You are a helpful assistant.")
+    if case .literal(let instructions)? = agent.instructions {
+        #expect(instructions == "You are a helpful assistant.")
+    } else {
+        #expect(Bool(false), "Instructions should be literal")
+    }
     #expect(agent.tools.isEmpty)
-    #expect(agent.guardrails.isEmpty)
+    #expect(agent.inputGuardrails.isEmpty)
+    #expect(agent.outputGuardrails.isEmpty)
     #expect(agent.handoffs.isEmpty)
 }
 
@@ -37,7 +42,7 @@ import Testing
     )
     
     // Create guardrails
-    let inputGuardrail = InputLengthGuardrail(maxLength: 100)
+    let inputGuardrail = AnyInputGuardrail(InputLengthGuardrail(maxLength: 100))
     
     // Create model settings
     let modelSettings = ModelSettings(
@@ -52,16 +57,20 @@ import Testing
         name: "FullConfigAgent",
         instructions: "You are a comprehensive test agent.",
         tools: [tool1, tool2],
-        guardrails: [inputGuardrail],
+        inputGuardrails: [inputGuardrail],
         modelSettings: modelSettings
     )
     
     #expect(agent.name == "FullConfigAgent")
-    #expect(agent.instructions == "You are a comprehensive test agent.")
+    if case .literal(let instructions)? = agent.instructions {
+        #expect(instructions == "You are a comprehensive test agent.")
+    } else {
+        #expect(Bool(false), "Instructions should be literal")
+    }
     #expect(agent.tools.count == 2)
     #expect(agent.tools[0].name == "echo")
     #expect(agent.tools[1].name == "reverse")
-    #expect(agent.guardrails.count == 1)
+    #expect(agent.inputGuardrails.count == 1)
     #expect(agent.modelSettings.modelName == "test-model")
     #expect(agent.modelSettings.temperature == 0.7)
     #expect(agent.modelSettings.topP == 0.9)
@@ -94,11 +103,11 @@ import Testing
     let agent = Agent<Void>(name: "ChainedAgent", instructions: "You are a method-chained agent.")
         .addTool(tool1)
         .addTool(tool2)
-        .addGuardrail(inputGuardrail)
+        .addInputGuardrail(inputGuardrail)
     
     #expect(agent.name == "ChainedAgent")
     #expect(agent.tools.count == 2)
-    #expect(agent.guardrails.count == 1)
+    #expect(agent.inputGuardrails.count == 1)
 }
 
 @Test func testAgentClone() async throws {
@@ -119,7 +128,14 @@ import Testing
     
     // Verify the clone has the same properties
     #expect(clonedAgent.name == originalAgent.name)
-    #expect(clonedAgent.instructions == originalAgent.instructions)
+    switch (clonedAgent.instructions, originalAgent.instructions) {
+    case (.literal(let lhs)?, .literal(let rhs)?):
+        #expect(lhs == rhs)
+    case (.none, .none):
+        break
+    default:
+        #expect(Bool(false), "Instructions mismatch")
+    }
     #expect(clonedAgent.tools.count == originalAgent.tools.count)
     #expect(clonedAgent.tools[0].name == originalAgent.tools[0].name)
     
@@ -210,7 +226,8 @@ import Testing
     )
     
     // Execute the tool
-    let result = try await calculator.callAsFunction(["a": 5, "b": 3], context: ())
+    let runContext = RunContext(value: ())
+    let result = try await calculator.invoke(parameters: ["a": 5, "b": 3], runContext: runContext)
     
     #expect(result as? Int == 8)
 }
@@ -285,7 +302,7 @@ import Testing
     )
     
     // Execute the tool
-    let result = try await addTool.callAsFunction(["a": 10, "b": 20], context: ())
+    let result = try await addTool.invoke(parameters: ["a": 10, "b": 20], runContext: RunContext(value: ()))
     
     #expect(result as? Int == 30)
 }
@@ -298,13 +315,13 @@ import Testing
     
     // Test valid input
     let validInput = "Hello"
-    let processedInput = try guardrail.validateInput(validInput)
+    let processedInput = try guardrail.validate(validInput, context: ())
     #expect(processedInput == validInput)
     
     // Test invalid input
     let invalidInput = "This is a very long input that exceeds the maximum length"
     do {
-        let _ = try guardrail.validateInput(invalidInput)
+        _ = try guardrail.validate(invalidInput, context: ())
         #expect(Bool(false), "Should have thrown an error")
     } catch let error as GuardrailError {
         switch error {
@@ -322,13 +339,13 @@ import Testing
     
     // Test valid output (doesn't contain the blocked word)
     let validOutput = "This is an allowed message"
-    let processedOutput = try blockingGuardrail.validateOutput(validOutput)
+    let processedOutput = try blockingGuardrail.validate(validOutput, context: ())
     #expect(processedOutput == validOutput)
     
     // Test invalid output (contains the blocked word)
     let invalidOutput = "This message contains forbidden content"
     do {
-        let _ = try blockingGuardrail.validateOutput(invalidOutput)
+        _ = try blockingGuardrail.validate(invalidOutput, context: ())
         #expect(Bool(false), "Should have thrown an error")
     } catch let error as GuardrailError {
         switch error {
@@ -344,13 +361,13 @@ import Testing
     
     // Test valid output (contains the required word)
     let validRequiredOutput = "This message contains required content"
-    let processedRequiredOutput = try requiringGuardrail.validateOutput(validRequiredOutput)
+    let processedRequiredOutput = try requiringGuardrail.validate(validRequiredOutput, context: ())
     #expect(processedRequiredOutput == validRequiredOutput)
     
     // Test invalid output (doesn't contain the required word)
     let invalidRequiredOutput = "This message doesn't have the necessary text"
     do {
-        let _ = try requiringGuardrail.validateOutput(invalidRequiredOutput)
+        _ = try requiringGuardrail.validate(invalidRequiredOutput, context: ())
         #expect(Bool(false), "Should have thrown an error")
     } catch let error as GuardrailError {
         switch error {
@@ -382,14 +399,14 @@ import Testing
     #expect(settings.maxTokens == 2000)
     #expect(settings.responseFormat == .json)
     #expect(settings.seed == 12345)
-    #expect(settings.additionalParameters["custom"] as? String == "value")
+    #expect(settings.additionalParameters["custom"] == "value")
 }
 
 @Test func testDefaultModelSettings() async throws {
     // Create model settings with defaults
     let settings = ModelSettings()
     
-    #expect(settings.modelName == "gpt-4-turbo")
+    #expect(settings.modelName == "gpt-4.1")
     #expect(settings.temperature == nil)
     #expect(settings.topP == nil)
     #expect(settings.maxTokens == nil)

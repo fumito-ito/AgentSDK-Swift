@@ -8,8 +8,8 @@ public final class Run<Context> {
     /// The input for the run
     public let input: String
     
-    /// The context for the run
-    public let context: Context
+    /// The run context wrapper containing the caller context and usage information
+    public let runContext: RunContext<Context>
     
     /// The history of messages for the run
     public private(set) var messages: [Message] = []
@@ -20,20 +20,28 @@ public final class Run<Context> {
     /// The model used for the run
     private let model: ModelInterface
     
+    /// Maximum number of turns before giving up. Mirrors Python default.
+    private let maxTurns: Int
+    
     /// Creates a new run
     /// - Parameters:
     ///   - agent: The agent to run
     ///   - input: The input for the run
     ///   - context: The context for the run
     ///   - model: The model to use for the run
-    public init(agent: Agent<Context>, input: String, context: Context, model: ModelInterface) {
+    ///   - maxTurns: Maximum number of iterations allowed in the run loop
+    public init(
+        agent: Agent<Context>,
+        input: String,
+        context: Context,
+        model: ModelInterface,
+        maxTurns: Int = 10
+    ) {
         self.agent = agent
         self.input = input
-        self.context = context
         self.model = model
-        
-        // Initialize with system message
-        self.messages.append(.system(agent.instructions))
+        self.maxTurns = maxTurns
+        self.runContext = RunContext(value: context)
     }
     
     /// Executes the run
@@ -46,103 +54,113 @@ public final class Run<Context> {
         
         state = .running
         
-        // Validate input with guardrails
-        var validatedInput = input
-        for guardrail in agent.guardrails {
-            do {
-                validatedInput = try guardrail.validateInput(validatedInput)
-            } catch let error as GuardrailError {
-                state = .failed
-                throw RunError.guardrailError(error)
-            }
-        }
-        
-        // Check for handoffs
-        for handoff in agent.handoffs {
-            if handoff.filter.shouldHandoff(input: validatedInput, context: context) {
-                // Create and execute a new run with the handoff agent
-                let handoffRun = Run(
-                    agent: handoff.agent,
-                    input: validatedInput,
-                    context: context,
-                    model: model
-                )
-                
-                return try await handoffRun.execute()
-            }
-        }
-        
-        // Add validated user input to messages
-        messages.append(.user(validatedInput))
-        
-        // Run the agent
-        var finalOutput: String = ""
-        
         do {
-            let response = try await model.getResponse(
-                messages: messages,
-                settings: agent.modelSettings
-            )
-            
-            // Process tool calls if any
-            if !response.toolCalls.isEmpty {
-                let toolResults = try await processToolCalls(response.toolCalls)
-                
-                // Add assistant message with tool calls
-                messages.append(.assistant(response.content))
-                
-                // Add tool results to messages
-                for result in toolResults {
-                    messages.append(Message(
-                        role: .tool,
-                        content: .toolResults(result)
-                    ))
-                }
-                
-                // Get final response after tool calls
-                let finalResponse = try await model.getResponse(
-                    messages: messages,
-                    settings: agent.modelSettings
-                )
-                
-                finalOutput = finalResponse.content
-            } else {
-                finalOutput = response.content
+            if let systemInstructions = try await agent.resolveInstructions(runContext: runContext) {
+                messages.append(.system(systemInstructions))
             }
             
-            // Validate output with guardrails
-            for guardrail in agent.guardrails {
+            var validatedInput = input
+            for guardrail in agent.inputGuardrails {
                 do {
-                    finalOutput = try guardrail.validateOutput(finalOutput)
+                    validatedInput = try guardrail.validate(validatedInput, context: runContext.value)
                 } catch let error as GuardrailError {
                     state = .failed
                     throw RunError.guardrailError(error)
                 }
             }
             
-            // Add final assistant message
-            messages.append(.assistant(finalOutput))
+            // Check for handoffs before running the agent
+            for handoff in agent.handoffs {
+                if handoff.filter.shouldHandoff(input: validatedInput, context: runContext.value) {
+                    let handoffRun = Run(
+                        agent: handoff.agent,
+                        input: validatedInput,
+                        context: runContext.value,
+                        model: model,
+                        maxTurns: maxTurns
+                    )
+                    let result = try await handoffRun.execute()
+                    runContext.mergeUsage(from: handoffRun.runContext)
+                    messages = handoffRun.messages
+                    state = .completed
+                    return result
+                }
+            }
             
-            state = .completed
-            return Result(
-                finalOutput: finalOutput,
-                messages: messages
-            )
+            messages.append(.user(validatedInput))
+            
+            var currentTurn = 0
+            while currentTurn < maxTurns {
+                currentTurn += 1
+                let enabledTools = await agent.enabledTools(for: runContext)
+                let response = try await model.getResponse(
+                    messages: messages,
+                    settings: agent.modelSettings
+                )
+                runContext.recordUsage(response.usage)
+                messages.append(.assistant(response.content))
+                
+                if response.toolCalls.isEmpty {
+                    var finalOutput = response.content
+                    for guardrail in agent.outputGuardrails {
+                        do {
+                            finalOutput = try guardrail.validate(finalOutput, context: runContext.value)
+                        } catch let error as GuardrailError {
+                            state = .failed
+                            throw RunError.guardrailError(error)
+                        }
+                    }
+                    state = .completed
+                    return Result(finalOutput: finalOutput, messages: messages, usage: runContext.usage)
+                }
+                
+                let toolProcessing = try await processToolCalls(
+                    response.toolCalls,
+                    availableTools: enabledTools
+                )
+                for message in toolProcessing.messageResults {
+                    messages.append(Message(role: .tool, content: .toolResults(message)))
+                }
+                
+                if let finalFromTools = try await resolveToolBehavior(
+                    toolProcessing.callResults,
+                    behavior: agent.toolUseBehavior
+                ) {
+                    var finalOutput = finalFromTools
+                    for guardrail in agent.outputGuardrails {
+                        do {
+                            finalOutput = try guardrail.validate(finalOutput, context: runContext.value)
+                        } catch let error as GuardrailError {
+                            state = .failed
+                            throw RunError.guardrailError(error)
+                        }
+                    }
+                    messages.append(.assistant(finalOutput))
+                    state = .completed
+                    return Result(finalOutput: finalOutput, messages: messages, usage: runContext.usage)
+                }
+                
+                // Continue loop with tool results appended to message history.
+            }
+            
+            state = .failed
+            throw RunError.maxTurnsExceeded(maxTurns)
+        } catch let error as RunError {
+            state = .failed
+            throw error
         } catch {
             state = .failed
             throw RunError.executionError(error)
         }
     }
     
-    /// Processes tool calls from the model
-    /// - Parameter toolCalls: The tool calls to process
-    /// - Returns: The results of the tool calls
-    /// - Throws: RunError if there is a problem processing the tool calls
-    private func processToolCalls(_ toolCalls: [ModelResponse.ToolCall]) async throws -> [MessageContent.ToolResult] {
-        var results: [MessageContent.ToolResult] = []
-        
-        // Create a map of tool names to tools for easy lookup
-        let toolMap = Dictionary(uniqueKeysWithValues: agent.tools.map { ($0.name, $0) })
+    private func processToolCalls(
+        _ toolCalls: [ModelResponse.ToolCall],
+        availableTools: [Tool<Context>]
+    ) async throws -> ToolProcessingOutcome {
+        let toolMap = Dictionary(uniqueKeysWithValues: availableTools.map { ($0.name, $0) })
+        var messageResults: [MessageContent.ToolResult] = []
+        var callResults: [Agent<Context>.ToolCallResult] = []
         
         for toolCall in toolCalls {
             guard let tool = toolMap[toolCall.name] else {
@@ -150,27 +168,62 @@ public final class Run<Context> {
             }
             
             do {
-                let result = try await tool(toolCall.parameters, context: context)
-                let resultString: String
-                
-                if let stringResult = result as? String {
-                    resultString = stringResult
-                } else {
-                    // Convert result to JSON string
-                    let data = try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted])
-                    resultString = String(data: data, encoding: .utf8) ?? "Invalid result"
-                }
-                
-                results.append(MessageContent.ToolResult(
+                let result = try await tool.invoke(
+                    parameters: toolCall.parameters,
+                    runContext: runContext
+                )
+                let resultString = stringifyToolResult(result)
+                let toolResult = MessageContent.ToolResult(
                     toolCallId: toolCall.id,
                     result: resultString
+                )
+                messageResults.append(toolResult)
+                callResults.append(Agent.ToolCallResult(
+                    id: toolCall.id,
+                    name: toolCall.name,
+                    output: resultString
                 ))
             } catch {
                 throw RunError.toolExecutionError(toolName: toolCall.name, error: error)
             }
         }
         
-        return results
+        return ToolProcessingOutcome(
+            messageResults: messageResults,
+            callResults: callResults
+        )
+    }
+    
+    private func stringifyToolResult(_ result: Any) -> String {
+        if let stringResult = result as? String {
+            return stringResult
+        }
+        if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted]),
+           let jsonString = String(data: data, encoding: .utf8) {
+            return jsonString
+        }
+        return String(describing: result)
+    }
+    
+    private func resolveToolBehavior(
+        _ toolResults: [Agent<Context>.ToolCallResult],
+        behavior: Agent<Context>.ToolUseBehavior
+    ) async throws -> String? {
+        guard !toolResults.isEmpty else { return nil }
+        switch behavior {
+        case .runLLMAgain:
+            return nil
+        case .stopOnFirstTool:
+            return toolResults.first?.output
+        case .stopAtTools(let names):
+            if let match = toolResults.first(where: { names.contains($0.name) }) {
+                return match.output
+            }
+            return nil
+        case .custom(let handler):
+            let decision = try await handler(runContext, toolResults)
+            return decision.isFinalOutput ? decision.finalOutput ?? toolResults.last?.output : nil
+        }
     }
     
     /// Represents the result of a run
@@ -180,6 +233,9 @@ public final class Run<Context> {
         
         /// The complete message history for the run
         public let messages: [Message]
+        
+        /// Aggregated usage information for the run
+        public let usage: Usage
     }
     
     /// Represents the state of a run
@@ -193,9 +249,15 @@ public final class Run<Context> {
     /// Errors that can occur during a run
     public enum RunError: Error {
         case invalidState(String)
+        case maxTurnsExceeded(Int)
         case guardrailError(GuardrailError)
         case toolNotFound(String)
         case toolExecutionError(toolName: String, error: Error)
         case executionError(Error)
+    }
+    
+    private struct ToolProcessingOutcome {
+        let messageResults: [MessageContent.ToolResult]
+        let callResults: [Agent<Context>.ToolCallResult]
     }
 }

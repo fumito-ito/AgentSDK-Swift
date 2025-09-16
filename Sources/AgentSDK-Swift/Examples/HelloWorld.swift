@@ -13,6 +13,7 @@ public struct HelloWorldExample {
             name: "getCurrentTime",
             description: "Get the current time",
             parameters: [],
+            availability: .always,
             execute: { _, _ in
                 let formatter = DateFormatter()
                 formatter.timeStyle = .medium
