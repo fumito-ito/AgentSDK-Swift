@@ -2,6 +2,13 @@ import Foundation
 
 /// Static class for running agents
 public struct AgentRunner {
+    /// Executes an agent using the configured model provider.
+    /// - Parameters:
+    ///   - agent: The agent to run.
+    ///   - input: The user input that starts the conversation.
+    ///   - context: Arbitrary state passed through the run.
+    /// - Returns: The completed run result containing the final output, messages, and usage.
+    /// - Throws: `RunnerError` when model lookup, execution, or guardrail evaluation fails.
     public static func run<Context>(
         agent: Agent<Context>,
         input: String,
@@ -20,6 +27,14 @@ public struct AgentRunner {
         }
     }
     
+    /// Executes an agent while streaming intermediate output chunks to the supplied handler.
+    /// - Parameters:
+    ///   - agent: The agent to run.
+    ///   - input: The user input that starts the conversation.
+    ///   - context: Arbitrary state passed through the run.
+    ///   - streamHandler: Callback that receives streamed content chunks.
+    /// - Returns: The completed run result containing the final output, messages, and usage.
+    /// - Throws: `RunnerError` when model lookup, execution, or guardrail evaluation fails.
     public static func runStreamed<Context>(
         agent: Agent<Context>,
         input: String,
