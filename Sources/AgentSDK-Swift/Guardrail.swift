@@ -1,98 +1,138 @@
 import Foundation
 
-/// Protocol for enforcing constraints on agent input and output
-public protocol Guardrail {
-    /// Validates input before it is sent to the agent
-    /// - Parameter input: The input to validate
-    /// - Returns: The validated input, possibly modified
-    /// - Throws: GuardrailError if the input is invalid
-    func validateInput(_ input: String) throws -> String
-    
-    /// Validates output from the agent before it is returned to the user
-    /// - Parameter output: The output to validate
-    /// - Returns: The validated output, possibly modified
-    /// - Throws: GuardrailError if the output is invalid
-    func validateOutput(_ output: String) throws -> String
-}
-
-/// Errors that can occur during guardrail validation
-public enum GuardrailError: Error {
-    /// The input was invalid
+/// Marker protocol for guardrail errors.
+public enum GuardrailError: Error, Sendable {
     case invalidInput(reason: String)
-    
-    /// The output was invalid
     case invalidOutput(reason: String)
 }
 
-/// A guardrail that enforces constraints on input length
-public struct InputLengthGuardrail: Guardrail {
-    /// The maximum allowed input length
-    private let maxLength: Int
-    
-    /// Creates a new input length guardrail
-    /// - Parameter maxLength: The maximum allowed input length
-    public init(maxLength: Int) {
-        self.maxLength = maxLength
+/// Protocol for enforcing constraints on agent input.
+public protocol InputGuardrail<Context>: Sendable {
+    associatedtype Context
+    func validate(_ input: String, context: Context) throws -> String
+}
+
+/// Protocol for enforcing constraints on agent output.
+public protocol OutputGuardrail<Context>: Sendable {
+    associatedtype Context
+    func validate(_ output: String, context: Context) throws -> String
+}
+
+/// Type-erased wrapper for input guardrails.
+public struct AnyInputGuardrail<Context>: Sendable {
+    private let validator: @Sendable (String, Context) throws -> String
+
+    /// Creates a type-erased wrapper around a strongly typed guardrail.
+    /// - Parameter guardrail: The concrete guardrail to wrap.
+    public init<G: InputGuardrail>(_ guardrail: G) where G.Context == Context {
+        validator = guardrail.validate
     }
-    
-    /// Validates that the input length is within the allowed limit
-    /// - Parameter input: The input to validate
-    /// - Returns: The input if it is valid
-    /// - Throws: GuardrailError if the input is too long
-    public func validateInput(_ input: String) throws -> String {
-        if input.count > maxLength {
-            throw GuardrailError.invalidInput(reason: "Input is too long. Maximum length is \(maxLength) characters.")
-        }
-        return input
+
+    /// Creates a type-erased wrapper from a validation closure.
+    /// - Parameter validator: Closure that performs validation for the provided context.
+    public init(_ validator: @Sendable @escaping (String, Context) throws -> String) {
+        self.validator = validator
     }
-    
-    /// Pass-through for output validation
-    /// - Parameter output: The output to validate
-    /// - Returns: The output unchanged
-    public func validateOutput(_ output: String) throws -> String {
-        return output
+
+    /// Validates input text using the wrapped guardrail logic.
+    /// - Parameters:
+    ///   - input: The input text to validate.
+    ///   - context: The associated context forwarded to the guardrail.
+    /// - Returns: The validated (and potentially transformed) input string.
+    /// - Throws: `GuardrailError` if the guardrail fails validation.
+    public func validate(_ input: String, context: Context) throws -> String {
+        try validator(input, context)
     }
 }
 
-/// A guardrail that enforces constraints on output content using a regular expression
-public struct RegexContentGuardrail: Guardrail {
-    /// The regular expression to match against the output
-    private let regex: NSRegularExpression
-    
-    /// Whether to block matches (true) or require matches (false)
-    private let blockMatches: Bool
-    
-    /// Creates a new regex content guardrail
+/// Type-erased wrapper for output guardrails.
+public struct AnyOutputGuardrail<Context>: Sendable {
+    private let validator: @Sendable (String, Context) throws -> String
+
+    /// Creates a type-erased wrapper around a strongly typed guardrail.
+    /// - Parameter guardrail: The concrete guardrail to wrap.
+    public init<G: OutputGuardrail>(_ guardrail: G) where G.Context == Context {
+        validator = guardrail.validate
+    }
+
+    /// Creates a type-erased wrapper from a validation closure.
+    /// - Parameter validator: Closure that performs validation for the provided context.
+    public init(_ validator: @Sendable @escaping (String, Context) throws -> String) {
+        self.validator = validator
+    }
+
+    /// Validates output text using the wrapped guardrail logic.
     /// - Parameters:
-    ///   - pattern: The regex pattern to match against the output
-    ///   - blockMatches: Whether to block matches (true) or require matches (false)
-    /// - Throws: An error if the regex pattern is invalid
+    ///   - output: The output text to validate.
+    ///   - context: The associated context forwarded to the guardrail.
+    /// - Returns: The validated (and potentially transformed) output string.
+    /// - Throws: `GuardrailError` if the guardrail fails validation.
+    public func validate(_ output: String, context: Context) throws -> String {
+        try validator(output, context)
+    }
+}
+
+/// A guardrail that enforces constraints on input length.
+public struct InputLengthGuardrail: InputGuardrail {
+    public typealias Context = Void
+
+    private let maxLength: Int
+
+    /// Creates a guardrail that enforces a maximum input length.
+    /// - Parameter maxLength: The maximum number of characters permitted.
+    public init(maxLength: Int) {
+        self.maxLength = maxLength
+    }
+
+    /// Validates that the provided input does not exceed the configured maximum length.
+    /// - Parameters:
+    ///   - input: The input text to validate.
+    ///   - context: The context supplied during validation (unused by default).
+    /// - Returns: The original input if validation succeeds.
+    /// - Throws: `GuardrailError.invalidInput` when the input is too long.
+    public func validate(_ input: String, context: Context) throws -> String {
+        if input.count > maxLength {
+            throw GuardrailError.invalidInput(
+                reason: "Input is too long. Maximum length is \(maxLength) characters."
+            )
+        }
+        return input
+    }
+}
+
+/// A guardrail that enforces constraints on output content using a regular expression.
+public struct RegexContentGuardrail: OutputGuardrail {
+    public typealias Context = Void
+
+    private let regex: NSRegularExpression
+    private let blockMatches: Bool
+
+    /// Creates a guardrail that evaluates outputs against a regular expression.
+    /// - Parameters:
+    ///   - pattern: The regex pattern used for validation.
+    ///   - blockMatches: When `true`, outputs matching the pattern are blocked; when `false`,
+    ///     outputs must contain a match.
     public init(pattern: String, blockMatches: Bool = true) throws {
         self.regex = try NSRegularExpression(pattern: pattern, options: [])
         self.blockMatches = blockMatches
     }
-    
-    /// Pass-through for input validation
-    /// - Parameter input: The input to validate
-    /// - Returns: The input unchanged
-    public func validateInput(_ input: String) throws -> String {
-        return input
-    }
-    
-    /// Validates that the output matches the regex constraints
-    /// - Parameter output: The output to validate
-    /// - Returns: The output if it is valid
-    /// - Throws: GuardrailError if the output does not match the constraints
-    public func validateOutput(_ output: String) throws -> String {
+
+    /// Validates that the output satisfies the regex constraint.
+    /// - Parameters:
+    ///   - output: The output text to validate.
+    ///   - context: Ignored placeholder context for protocol conformance.
+    /// - Returns: The original output if validation succeeds.
+    /// - Throws: `GuardrailError.invalidOutput` when the regex constraint is violated.
+    public func validate(_ output: String, context: Context) throws -> String {
         let range = NSRange(location: 0, length: output.utf16.count)
         let matches = regex.matches(in: output, options: [], range: range)
-        
+
         if blockMatches && !matches.isEmpty {
             throw GuardrailError.invalidOutput(reason: "Output contains blocked content.")
         } else if !blockMatches && matches.isEmpty {
             throw GuardrailError.invalidOutput(reason: "Output does not contain required content.")
         }
-        
+
         return output
     }
 }

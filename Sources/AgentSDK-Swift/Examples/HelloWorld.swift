@@ -7,12 +7,13 @@ public struct HelloWorldExample {
     public static func run(apiKey: String) async throws {
         // Register OpenAI models
         await ModelProvider.shared.registerOpenAIModels(apiKey: apiKey)
-        
+
         // Create a tool that returns the current time
         let currentTimeTool = Tool<Void>(
             name: "getCurrentTime",
             description: "Get the current time",
             parameters: [],
+            availability: .always,
             execute: { _, _ in
                 let formatter = DateFormatter()
                 formatter.timeStyle = .medium
@@ -20,7 +21,7 @@ public struct HelloWorldExample {
                 return formatter.string(from: Date())
             }
         )
-        
+
         // Create an agent with the current time tool
         let agent = Agent<Void>(
             name: "TimeAssistant",
@@ -29,27 +30,27 @@ public struct HelloWorldExample {
             When asked about the time, use the getCurrentTime tool to provide an accurate response.
             """
         ).addTool(currentTimeTool)
-        
+
         // Run the agent
         print("Running agent...")
-        
+
         let result = try await AgentRunner.run(
             agent: agent,
             input: "What time is it right now?",
             context: ()
         )
-        
+
         // Print the result
         print("Agent response:")
         print(result.finalOutput)
     }
-    
+
     /// Runs the hello world example with streaming
     /// - Parameter apiKey: The OpenAI API key
     public static func runStreamed(apiKey: String) async throws {
         // Register OpenAI models
         await ModelProvider.shared.registerOpenAIModels(apiKey: apiKey)
-        
+
         // Create a tool that returns the current time
         let currentTimeTool = Tool<Void>(
             name: "getCurrentTime",
@@ -62,7 +63,7 @@ public struct HelloWorldExample {
                 return formatter.string(from: Date())
             }
         )
-        
+
         // Create an agent with the current time tool
         let agent = Agent<Void>(
             name: "TimeAssistant",
@@ -71,11 +72,11 @@ public struct HelloWorldExample {
             When asked about the time, use the getCurrentTime tool to provide an accurate response.
             """
         ).addTool(currentTimeTool)
-        
+
         // Run the agent with streaming
         print("Running agent with streaming...")
-        
-        let _ = try await AgentRunner.runStreamed(
+
+        _ = try await AgentRunner.runStreamed(
             agent: agent,
             input: "What time is it right now?",
             context: ()
@@ -83,7 +84,7 @@ public struct HelloWorldExample {
             // Print each content chunk as it arrives
             print(content, terminator: "")
         }
-        
+
         // Print completion message
         print("\nAgent response complete.")
     }

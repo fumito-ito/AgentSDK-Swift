@@ -2,23 +2,20 @@ import Foundation
 
 /// Static class for running agents
 public struct AgentRunner {
-    /// Runs an agent with input and context
+    /// Executes an agent using the configured model provider.
     /// - Parameters:
-    ///   - agent: The agent to run
-    ///   - input: The input for the agent
-    ///   - context: The context for the agent
-    /// - Returns: The result of the run
-    /// - Throws: RunnerError if there is a problem during execution
+    ///   - agent: The agent to run.
+    ///   - input: The user input that starts the conversation.
+    ///   - context: Arbitrary state passed through the run.
+    /// - Returns: The completed run result containing the final output, messages, and usage.
+    /// - Throws: `RunnerError` when model lookup, execution, or guardrail evaluation fails.
     public static func run<Context>(
         agent: Agent<Context>,
         input: String,
         context: Context
     ) async throws -> Run<Context>.Result {
         do {
-            // Get model from provider
             let model = try await ModelProvider.shared.getModel(modelName: agent.modelSettings.modelName)
-            
-            // Create and execute run
             let run = Run(agent: agent, input: input, context: context, model: model)
             return try await run.execute()
         } catch let error as ModelProvider.ModelProviderError {
@@ -29,15 +26,15 @@ public struct AgentRunner {
             throw RunnerError.unknownError(error)
         }
     }
-    
-    /// Runs an agent with input and context, streaming the results
+
+    /// Executes an agent while streaming intermediate output chunks to the supplied handler.
     /// - Parameters:
-    ///   - agent: The agent to run
-    ///   - input: The input for the agent
-    ///   - context: The context for the agent
-    ///   - streamHandler: Handler for streamed content
-    /// - Returns: The final result of the run
-    /// - Throws: RunnerError if there is a problem during execution
+    ///   - agent: The agent to run.
+    ///   - input: The user input that starts the conversation.
+    ///   - context: Arbitrary state passed through the run.
+    ///   - streamHandler: Callback that receives streamed content chunks.
+    /// - Returns: The completed run result containing the final output, messages, and usage.
+    /// - Throws: `RunnerError` when model lookup, execution, or guardrail evaluation fails.
     public static func runStreamed<Context>(
         agent: Agent<Context>,
         input: String,
@@ -45,196 +42,222 @@ public struct AgentRunner {
         streamHandler: @escaping (String) async -> Void
     ) async throws -> Run<Context>.Result {
         do {
-            // Get model from provider
             let model = try await ModelProvider.shared.getModel(modelName: agent.modelSettings.modelName)
-            
-            // Create modified model settings for streaming
-            let streamSettings = agent.modelSettings
-            
-            // Create and execute streamed run
+            let runContext = RunContext(value: context)
             return try await runStreamedInternal(
                 agent: agent,
                 input: input,
-                context: context,
+                runContext: runContext,
                 model: model,
-                settings: streamSettings,
+                settings: agent.modelSettings,
                 streamHandler: streamHandler
             )
         } catch let error as ModelProvider.ModelProviderError {
             throw RunnerError.modelError(error)
+        } catch let error as Run<Context>.RunError {
+            throw RunnerError.runError(error)
         } catch {
             throw RunnerError.unknownError(error)
         }
     }
-    
-    /// Internal implementation of streamed run
-    /// - Parameters:
-    ///   - agent: The agent to run
-    ///   - input: The input for the agent
-    ///   - context: The context for the agent
-    ///   - model: The model to use
-    ///   - settings: The model settings
-    ///   - streamHandler: Handler for streamed content
-    /// - Returns: The final result of the run
-    /// - Throws: RunnerError if there is a problem during execution
+
     private static func runStreamedInternal<Context>(
         agent: Agent<Context>,
         input: String,
-        context: Context,
+        runContext: RunContext<Context>,
         model: ModelInterface,
         settings: ModelSettings,
-        streamHandler: @escaping (String) async -> Void
+        streamHandler: @escaping (String) async -> Void,
+        turn: Int = 0,
+        maxTurns: Int = 10
     ) async throws -> Run<Context>.Result {
-        // Validate input with guardrails
+        guard turn < maxTurns else {
+            throw Run<Context>.RunError.maxTurnsExceeded(maxTurns)
+        }
+
+        let systemInstructions = try await agent.resolveInstructions(runContext: runContext)
+
         var validatedInput = input
-        for guardrail in agent.guardrails {
+        for guardrail in agent.inputGuardrails {
             do {
-                validatedInput = try guardrail.validateInput(validatedInput)
+                validatedInput = try guardrail.validate(validatedInput, context: runContext.value)
             } catch let error as GuardrailError {
-                throw RunnerError.guardrailError(error)
+                throw Run<Context>.RunError.guardrailError(error)
             }
         }
-        
-        // Check for handoffs
+
         for handoff in agent.handoffs {
-            if handoff.filter.shouldHandoff(input: validatedInput, context: context) {
-                // Create and execute a new run with the handoff agent
-                return try await runStreamedInternal(
+            if handoff.filter.shouldHandoff(input: validatedInput, context: runContext.value) {
+                let result = try await runStreamedInternal(
                     agent: handoff.agent,
                     input: validatedInput,
-                    context: context,
+                    runContext: runContext,
                     model: model,
                     settings: handoff.agent.modelSettings,
-                    streamHandler: streamHandler
+                    streamHandler: streamHandler,
+                    turn: turn,
+                    maxTurns: maxTurns
                 )
+                return result
             }
         }
-        
-        // Initialize messages with system message and user input
-        var messages: [Message] = [
-            .system(agent.instructions),
-            .user(validatedInput)
-        ]
-        
-        // Run the agent with streaming
-        var contentBuffer = ""
-        var toolCalls: [ModelResponse.ToolCall] = []
-        
-        let response = try await model.getStreamedResponse(
-            messages: messages,
-            settings: settings
-        ) { event in
-            switch event {
-            case .content(let content):
-                contentBuffer += content
-                await streamHandler(content)
-                
-            case .toolCall(let toolCall):
-                toolCalls.append(toolCall)
-                
-            case .end:
-                break
-            }
+
+        var messages: [Message] = []
+        if let systemInstructions {
+            messages.append(.system(systemInstructions))
         }
-        
-        // Add assistant message
-        messages.append(.assistant(response.content))
-        
-        // Process tool calls if any
-        if !toolCalls.isEmpty {
-            let toolMap = Dictionary(uniqueKeysWithValues: agent.tools.map { ($0.name, $0) })
-            var toolResults: [MessageContent.ToolResult] = []
-            
-            for toolCall in toolCalls {
-                guard let tool = toolMap[toolCall.name] else {
-                    throw RunnerError.toolNotFound("Tool \(toolCall.name) not found")
-                }
-                
-                do {
-                    // Stream tool name before execution
-                    await streamHandler("\nExecuting tool: \(toolCall.name)...\n")
-                    
-                    let result = try await tool(toolCall.parameters, context: context)
-                    let resultString: String
-                    
-                    if let stringResult = result as? String {
-                        resultString = stringResult
-                    } else {
-                        // Convert result to JSON string
-                        let data = try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted])
-                        resultString = String(data: data, encoding: .utf8) ?? "Invalid result"
-                    }
-                    
-                    let toolResult = MessageContent.ToolResult(
-                        toolCallId: toolCall.id,
-                        result: resultString
-                    )
-                    
-                    toolResults.append(toolResult)
-                    
-                    // Add tool result message
-                    messages.append(Message(role: .tool, content: .toolResults(toolResult)))
-                    
-                    // Stream result
-                    await streamHandler("\nTool result: \(resultString)\n")
-                } catch {
-                    throw RunnerError.toolExecutionError(toolName: toolCall.name, error: error)
-                }
-            }
-            
-            // Get final response after tool calls
-            contentBuffer = ""
-            
-            let finalResponse = try await model.getStreamedResponse(
+        messages.append(.user(validatedInput))
+
+        var currentTurn = turn
+        while currentTurn < maxTurns {
+            currentTurn += 1
+            let enabledTools = await agent.enabledTools(for: runContext)
+            var toolCalls: [ModelResponse.ToolCall] = []
+            let response = try await model.getStreamedResponse(
                 messages: messages,
                 settings: settings
             ) { event in
                 switch event {
                 case .content(let content):
-                    contentBuffer += content
                     await streamHandler(content)
-                    
-                case .toolCall, .end:
+                case .toolCall(let toolCall):
+                    toolCalls.append(toolCall)
+                case .end:
                     break
                 }
             }
-            
-            // Add final assistant message
-            messages.append(.assistant(finalResponse.content))
-            
-            // Validate output with guardrails
-            var finalOutput = finalResponse.content
-            for guardrail in agent.guardrails {
-                do {
-                    finalOutput = try guardrail.validateOutput(finalOutput)
-                } catch let error as GuardrailError {
-                    throw RunnerError.guardrailError(error)
+            runContext.recordUsage(response.usage)
+            messages.append(.assistant(response.content))
+
+            if response.toolCalls.isEmpty {
+                var finalOutput = response.content
+                for guardrail in agent.outputGuardrails {
+                    do {
+                        finalOutput = try guardrail.validate(finalOutput, context: runContext.value)
+                    } catch let error as GuardrailError {
+                        throw Run<Context>.RunError.guardrailError(error)
+                    }
                 }
+                return Run.Result(
+                    finalOutput: finalOutput,
+                    messages: messages,
+                    usage: runContext.usage
+                )
             }
-            
-            return Run<Context>.Result(
-                finalOutput: finalOutput,
-                messages: messages
+
+            let processing = try await processToolCalls(
+                toolCalls,
+                enabledTools: enabledTools,
+                runContext: runContext,
+                streamHandler: streamHandler
             )
-        } else {
-            // Validate output with guardrails
-            var finalOutput = response.content
-            for guardrail in agent.guardrails {
-                do {
-                    finalOutput = try guardrail.validateOutput(finalOutput)
-                } catch let error as GuardrailError {
-                    throw RunnerError.guardrailError(error)
+            for toolMessage in processing.messageResults {
+                messages.append(Message(role: .tool, content: .toolResults(toolMessage)))
+            }
+
+            if let finalFromTools = try await resolveToolBehavior(
+                processing.callResults,
+                behavior: agent.toolUseBehavior,
+                runContext: runContext
+            ) {
+                var finalOutput = finalFromTools
+                for guardrail in agent.outputGuardrails {
+                    do {
+                        finalOutput = try guardrail.validate(finalOutput, context: runContext.value)
+                    } catch let error as GuardrailError {
+                        throw Run<Context>.RunError.guardrailError(error)
+                    }
                 }
+                messages.append(.assistant(finalOutput))
+                await streamHandler(finalOutput)
+                return Run.Result(
+                    finalOutput: finalOutput,
+                    messages: messages,
+                    usage: runContext.usage
+                )
             }
-            
-            return Run<Context>.Result(
-                finalOutput: finalOutput,
-                messages: messages
-            )
+        }
+
+        throw Run<Context>.RunError.maxTurnsExceeded(maxTurns)
+    }
+
+    private static func processToolCalls<Context>(
+        _ toolCalls: [ModelResponse.ToolCall],
+        enabledTools: [Tool<Context>],
+        runContext: RunContext<Context>,
+        streamHandler: @escaping (String) async -> Void
+    ) async throws -> ToolProcessingOutcome<Context> {
+        let toolMap = Dictionary(uniqueKeysWithValues: enabledTools.map { ($0.name, $0) })
+        var messageResults: [MessageContent.ToolResult] = []
+        var callResults: [Agent<Context>.ToolCallResult] = []
+
+        for toolCall in toolCalls {
+            guard let tool = toolMap[toolCall.name] else {
+                throw Run<Context>.RunError.toolNotFound("Tool \(toolCall.name) not found")
+            }
+
+            await streamHandler("\nExecuting tool: \(toolCall.name)...\n")
+            do {
+                let rawResult = try await tool.invoke(
+                    parameters: toolCall.parameters,
+                    runContext: runContext
+                )
+                let resultString = stringifyToolResult(rawResult)
+                await streamHandler("\nTool result: \(resultString)\n")
+                let toolResult = MessageContent.ToolResult(
+                    toolCallId: toolCall.id,
+                    result: resultString
+                )
+                messageResults.append(toolResult)
+                callResults.append(Agent.ToolCallResult(
+                    id: toolCall.id,
+                    name: toolCall.name,
+                    output: resultString
+                ))
+            } catch {
+                throw Run<Context>.RunError.toolExecutionError(toolName: toolCall.name, error: error)
+            }
+        }
+
+        return ToolProcessingOutcome(
+            messageResults: messageResults,
+            callResults: callResults
+        )
+    }
+
+    private static func stringifyToolResult(_ result: Any) -> String {
+        if let stringResult = result as? String {
+            return stringResult
+        }
+        if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted]),
+           let jsonString = String(data: data, encoding: .utf8) {
+            return jsonString
+        }
+        return String(describing: result)
+    }
+
+    private static func resolveToolBehavior<Context>(
+        _ toolResults: [Agent<Context>.ToolCallResult],
+        behavior: Agent<Context>.ToolUseBehavior,
+        runContext: RunContext<Context>
+    ) async throws -> String? {
+        guard !toolResults.isEmpty else { return nil }
+        switch behavior {
+        case .runLLMAgain:
+            return nil
+        case .stopOnFirstTool:
+            return toolResults.first?.output
+        case .stopAtTools(let names):
+            if let match = toolResults.first(where: { names.contains($0.name) }) {
+                return match.output
+            }
+            return nil
+        case .custom(let handler):
+            let decision = try await handler(runContext, toolResults)
+            return decision.isFinalOutput ? decision.finalOutput ?? toolResults.last?.output : nil
         }
     }
-    
-    /// Errors that can occur during agent execution
+
     public enum RunnerError: Error {
         case modelError(ModelProvider.ModelProviderError)
         case runError(any Error)
@@ -242,5 +265,10 @@ public struct AgentRunner {
         case toolNotFound(String)
         case toolExecutionError(toolName: String, error: Error)
         case unknownError(Error)
+    }
+
+    private struct ToolProcessingOutcome<Context> {
+        let messageResults: [MessageContent.ToolResult]
+        let callResults: [Agent<Context>.ToolCallResult]
     }
 }

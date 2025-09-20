@@ -1,0 +1,8 @@
+included:
+  - Sources
+  - Tests
+excluded:
+  - Examples
+  - .build
+  - .vscode
+  - .github

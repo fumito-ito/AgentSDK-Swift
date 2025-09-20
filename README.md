@@ -93,9 +93,8 @@ let lengthGuardrail = InputLengthGuardrail(maxLength: 500)
 // Create an agent with the guardrail
 let agent = Agent<Void>(
     name: "AssistantWithGuardrails",
-    instructions: "You are a helpful assistant.",
-    guardrails: [lengthGuardrail]
-)
+    instructions: "You are a helpful assistant."
+).addInputGuardrail(lengthGuardrail)
 ```
 
 ### Multi-Agent Handoffs
