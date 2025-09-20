@@ -74,25 +74,22 @@ public final class OpenAIModel: ModelInterface {
         settings: ModelSettings,
         callback: @escaping (ModelStreamEvent) async -> Void
     ) async throws -> ModelResponse {
-        let streamSettings = settings
+        let data = try await performStreamRequest(messages: messages, settings: settings)
+        return try await processStreamedData(data, callback: callback)
+    }
 
-        // Create request body with stream enabled
-        var requestBody = try createRequestBody(messages: messages, settings: streamSettings)
+    private func performStreamRequest(messages: [Message], settings: ModelSettings) async throws -> Data {
+        var requestBody = try createRequestBody(messages: messages, settings: settings)
         requestBody.stream = true
 
         let endpoint = "\(apiBaseURL)/chat/completions"
-
-        // Create request
         var request = createURLRequest(url: endpoint)
 
-        // Add request body
         let bodyData = try JSONEncoder().encode(requestBody)
         request.httpBody = bodyData
 
-        // Create URLSession task
         let (data, response) = try await urlSession.data(for: request)
 
-        // Check response status
         guard let httpResponse = response as? HTTPURLResponse,
               httpResponse.statusCode == 200 else {
             let errorString = String(data: data, encoding: .utf8) ?? "Unknown error"
@@ -100,105 +97,129 @@ public final class OpenAIModel: ModelInterface {
             throw OpenAIModelError.requestFailed(statusCode: statusCode, message: errorString)
         }
 
-        // Process streamed response
+        return data
+    }
+
+    private func processStreamedData(
+        _ data: Data,
+        callback: @escaping (ModelStreamEvent) async -> Void
+    ) async throws -> ModelResponse {
         var contentBuffer = ""
         var toolCalls: [ModelResponse.ToolCall] = []
 
-        // Convert data to string and process line by line
-        if let responseStr = String(data: data, encoding: .utf8) {
-            let lines = responseStr.split(separator: "\n")
+        guard let responseStr = String(data: data, encoding: .utf8) else {
+            return ModelResponse(content: contentBuffer, toolCalls: toolCalls)
+        }
 
-            for line in lines {
-                if line.hasPrefix("data: ") {
-                    let dataContent = line.dropFirst(6)
+        let lines = responseStr.split(separator: "\n")
+        for line in lines {
+            if line.hasPrefix("data: ") {
+                let dataContent = line.dropFirst(6)
 
-                    // Check for the "[DONE]" message
-                    if dataContent == "[DONE]" {
-                        await callback(.end)
-                        continue
-                    }
-
-                    // Parse the JSON chunk
-                    do {
-                        let chunkData = Data(dataContent.utf8)
-                        let chunkResponse = try JSONDecoder().decode(ChatCompletionChunk.self, from: chunkData)
-
-                        if let choice = chunkResponse.choices.first {
-                            if let content = choice.delta.content, !content.isEmpty {
-                                contentBuffer += content
-                                await callback(.content(content))
-                            }
-
-                            if let toolCall = choice.delta.toolCalls?.first {
-                                // Handle tool call delta
-                                if let existingToolCall = toolCalls.first(where: { $0.id == toolCall.id }) {
-                                    // Update existing tool call
-                                    if let index = toolCalls.firstIndex(where: { $0.id == toolCall.id }) {
-                                        var params = existingToolCall.parameters
-
-                                        if let function = toolCall.function {
-                                            if let name = function.name {
-                                                toolCalls[index] = ModelResponse.ToolCall(
-                                                    id: existingToolCall.id,
-                                                    name: name,
-                                                    parameters: params
-                                                )
-                                            }
-
-                                            if let arguments = function.arguments {
-                                                do {
-                                                    if let jsonData = arguments.data(using: .utf8),
-                                                       let jsonParams = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
-                                                        // Merge with existing parameters
-                                                        for (key, value) in jsonParams {
-                                                            params[key] = value
-                                                        }
-
-                                                        toolCalls[index] = ModelResponse.ToolCall(
-                                                            id: existingToolCall.id,
-                                                            name: existingToolCall.name,
-                                                            parameters: params
-                                                        )
-                                                    }
-                                                } catch {
-                                                    // Ignore parsing errors for partial JSON
-                                                }
-                                            }
-                                        }
-                                    }
-                                } else if let id = toolCall.id, let function = toolCall.function, let name = function.name {
-                                    // Create new tool call
-                                    var params: [String: Any] = [:]
-
-                                    if let arguments = function.arguments {
-                                        do {
-                                            if let jsonData = arguments.data(using: .utf8),
-                                               let jsonParams = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
-                                                params = jsonParams
-                                            }
-                                        } catch {
-                                            // Ignore parsing errors for partial JSON
-                                        }
-                                    }
-
-                                    let newToolCall = ModelResponse.ToolCall(id: id, name: name, parameters: params)
-                                    toolCalls.append(newToolCall)
-                                    await callback(.toolCall(newToolCall))
-                                }
-                            }
-                        }
-                    } catch {
-                        // Ignore partial JSON errors
-                    }
+                if dataContent == "[DONE]" {
+                    await callback(.end)
+                    continue
                 }
+
+                try await processStreamChunk(
+                    dataContent,
+                    contentBuffer: &contentBuffer,
+                    toolCalls: &toolCalls,
+                    callback: callback
+                )
             }
         }
 
-        // Create final response
-        return ModelResponse(
-            content: contentBuffer,
-            toolCalls: toolCalls
-        )
+        return ModelResponse(content: contentBuffer, toolCalls: toolCalls)
+    }
+
+    private func processStreamChunk(
+        _ dataContent: Substring,
+        contentBuffer: inout String,
+        toolCalls: inout [ModelResponse.ToolCall],
+        callback: @escaping (ModelStreamEvent) async -> Void
+    ) async throws {
+        do {
+            let chunkData = Data(dataContent.utf8)
+            let chunkResponse = try JSONDecoder().decode(ChatCompletionChunk.self, from: chunkData)
+
+            guard let choice = chunkResponse.choices.first else { return }
+
+            if let content = choice.delta.content, !content.isEmpty {
+                contentBuffer += content
+                await callback(.content(content))
+            }
+
+            if let toolCall = choice.delta.toolCalls?.first {
+                await processToolCallDelta(toolCall, toolCalls: &toolCalls, callback: callback)
+            }
+        } catch {
+            // Ignore partial JSON errors
+        }
+    }
+
+    private func processToolCallDelta(
+        _ toolCall: ChatCompletionChunk.ToolCall,
+        toolCalls: inout [ModelResponse.ToolCall],
+        callback: @escaping (ModelStreamEvent) async -> Void
+    ) async {
+        if let existingIndex = toolCalls.firstIndex(where: { $0.id == toolCall.id }) {
+            updateExistingToolCall(at: existingIndex, with: toolCall, toolCalls: &toolCalls)
+        } else if let id = toolCall.id, let function = toolCall.function, let name = function.name {
+            let newToolCall = createNewToolCall(id: id, function: function, name: name)
+            toolCalls.append(newToolCall)
+            await callback(.toolCall(newToolCall))
+        }
+    }
+
+    private func updateExistingToolCall(
+        at index: Int,
+        with toolCall: ChatCompletionChunk.ToolCall,
+        toolCalls: inout [ModelResponse.ToolCall]
+    ) {
+        let existingToolCall = toolCalls[index]
+        var params = existingToolCall.parameters
+
+        guard let function = toolCall.function else { return }
+
+        if let name = function.name {
+            toolCalls[index] = ModelResponse.ToolCall(id: existingToolCall.id, name: name, parameters: params)
+        }
+
+        if let arguments = function.arguments {
+            do {
+                if let jsonData = arguments.data(using: .utf8),
+                   let jsonParams = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+                    for (key, value) in jsonParams {
+                        params[key] = value
+                    }
+                    toolCalls[index] = ModelResponse.ToolCall(
+                        id: existingToolCall.id,
+                        name: existingToolCall.name,
+                        parameters: params
+                    )
+                }
+            } catch {
+                // Ignore parsing errors for partial JSON
+            }
+        }
+    }
+
+    private func createNewToolCall(id: String, function: ChatCompletionChunk.Function, name: String) -> ModelResponse.ToolCall {
+        var params: [String: Any] = [:]
+
+        if let arguments = function.arguments {
+            do {
+                if let jsonData = arguments.data(using: .utf8),
+                   let jsonParams = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+                    params = jsonParams
+                }
+            } catch {
+                // Ignore parsing errors for partial JSON
+            }
+        }
+
+        return ModelResponse.ToolCall(id: id, name: name, parameters: params)
     }
 
     /// Creates a URLRequest configured with the appropriate headers
@@ -331,148 +352,149 @@ public final class OpenAIModel: ModelInterface {
         case invalidToolCallArguments(Error)
     }
 
-    // OpenAI API Types
+}
 
-    /// Request for the OpenAI chat completions API
-    private struct ChatCompletionRequest: Encodable {
-        let model: String
-        let messages: [ChatMessage]
-        let tools: [OpenAITool]?
-        var temperature: Double?
-        var topP: Double?
-        var maxTokens: Int?
-        var responseFormat: [String: String]?
-        var seed: Int?
-        var stream: Bool = false
+// MARK: - OpenAI API Types
+
+/// Request for the OpenAI chat completions API
+private struct ChatCompletionRequest: Encodable {
+    let model: String
+    let messages: [ChatMessage]
+    let tools: [OpenAITool]?
+    var temperature: Double?
+    var topP: Double?
+    var maxTokens: Int?
+    var responseFormat: [String: String]?
+    var seed: Int?
+    var stream: Bool = false
+}
+
+/// Tool for the OpenAI chat completions API
+private struct OpenAITool: Encodable {
+    let type: String
+    let function: FunctionDefinition
+}
+
+/// Message for the OpenAI chat completions API
+private struct ChatMessage: Encodable {
+    let role: String
+    var content: String?
+    var toolCallId: String?
+
+    init(role: String, content: String) {
+        self.role = role
+        self.content = content
     }
 
-    /// Tool for the OpenAI chat completions API
-    private struct OpenAITool: Encodable {
-        let type: String
-        let function: FunctionDefinition
+    init(role: String, toolCallId: String, content: String) {
+        self.role = role
+        self.toolCallId = toolCallId
+        self.content = content
+    }
+}
+
+/// Function definition for the OpenAI chat completions API
+private struct FunctionDefinition: Encodable {
+    let name: String
+    let description: String
+    let parameters: [String: Any]
+
+    enum CodingKeys: String, CodingKey {
+        case name, description, parameters
     }
 
-    /// Message for the OpenAI chat completions API
-    private struct ChatMessage: Encodable {
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(description, forKey: .description)
+
+        // Encode parameters dictionary as a raw JSON string
+        let parametersData = try JSONSerialization.data(withJSONObject: parameters)
+        let parametersString = String(data: parametersData, encoding: .utf8) ?? "{}"
+        try container.encode(parametersString, forKey: .parameters)
+    }
+}
+
+/// Response from the OpenAI chat completions API
+private struct ChatCompletionResponse: Decodable {
+    let id: String
+    let object: String
+    let created: Int
+    let model: String
+    let choices: [Choice]
+    let usage: Usage?
+
+    struct Choice: Decodable {
+        let index: Int
+        let message: Message
+        let finishReason: String
+    }
+
+    struct Message: Decodable {
         let role: String
-        var content: String?
-        var toolCallId: String?
-
-        init(role: String, content: String) {
-            self.role = role
-            self.content = content
-        }
-
-        init(role: String, toolCallId: String, content: String) {
-            self.role = role
-            self.toolCallId = toolCallId
-            self.content = content
-        }
+        let content: String?
+        let toolCalls: [ToolCall]?
     }
 
-    /// Function definition for the OpenAI chat completions API
-    private struct FunctionDefinition: Encodable {
+    struct ToolCall: Decodable {
+        let id: String
+        let type: String
+        let function: Function
+    }
+
+    struct Function: Decodable {
         let name: String
-        let description: String
-        let parameters: [String: Any]
+        let arguments: String
+    }
+
+    struct Usage: Decodable {
+        let promptTokens: Int
+        let completionTokens: Int
+        let totalTokens: Int
+    }
+}
+
+/// Chunk response from the OpenAI chat completions API when streaming
+private struct ChatCompletionChunk: Decodable {
+    let id: String
+    let object: String
+    let created: Int
+    let model: String
+    let choices: [Choice]
+
+    struct Choice: Decodable {
+        let index: Int
+        let delta: Delta
+        let finishReason: String?
+    }
+
+    struct Delta: Decodable {
+        let role: String?
+        let content: String?
+        let toolCalls: [ToolCall]?
 
         enum CodingKeys: String, CodingKey {
-            case name, description, parameters
-        }
-
-        func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(name, forKey: .name)
-            try container.encode(description, forKey: .description)
-
-            // Encode parameters dictionary as a raw JSON string
-            let parametersData = try JSONSerialization.data(withJSONObject: parameters)
-            let parametersString = String(data: parametersData, encoding: .utf8) ?? "{}"
-            try container.encode(parametersString, forKey: .parameters)
+            case role, content
+            case toolCalls = "tool_calls"
         }
     }
 
-    /// Response from the OpenAI chat completions API
-    private struct ChatCompletionResponse: Decodable {
-        let id: String
-        let object: String
-        let created: Int
-        let model: String
-        let choices: [Choice]
-        let usage: Usage?
+    struct ToolCall: Decodable {
+        let id: String?
+        let type: String?
+        let function: Function?
 
-        struct Choice: Decodable {
-            let index: Int
-            let message: Message
-            let finishReason: String
-        }
-
-        struct Message: Decodable {
-            let role: String
-            let content: String?
-            let toolCalls: [ToolCall]?
-        }
-
-        struct ToolCall: Decodable {
-            let id: String
-            let type: String
-            let function: Function
-        }
-
-        struct Function: Decodable {
-            let name: String
-            let arguments: String
-        }
-
-        struct Usage: Decodable {
-            let promptTokens: Int
-            let completionTokens: Int
-            let totalTokens: Int
+        enum CodingKeys: String, CodingKey {
+            case id, type, function
         }
     }
 
-    /// Chunk response from the OpenAI chat completions API when streaming
-    private struct ChatCompletionChunk: Decodable {
-        let id: String
-        let object: String
-        let created: Int
-        let model: String
-        let choices: [Choice]
+    struct Function: Decodable {
+        let name: String?
+        let arguments: String?
 
-        struct Choice: Decodable {
-            let index: Int
-            let delta: Delta
-            let finishReason: String?
-        }
-
-        struct Delta: Decodable {
-            let role: String?
-            let content: String?
-            let toolCalls: [ToolCall]?
-
-            enum CodingKeys: String, CodingKey {
-                case role, content
-                case toolCalls = "tool_calls"
-            }
-        }
-
-        struct ToolCall: Decodable {
-            let id: String?
-            let type: String?
-            let function: Function?
-
-            enum CodingKeys: String, CodingKey {
-                case id, type, function
-            }
-        }
-
-        struct Function: Decodable {
-            let name: String?
-            let arguments: String?
-
-            enum CodingKeys: String, CodingKey {
-                case name, arguments
-            }
+        enum CodingKeys: String, CodingKey {
+            case name, arguments
         }
     }
 }

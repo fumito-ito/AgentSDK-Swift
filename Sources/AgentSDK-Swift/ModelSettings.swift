@@ -154,6 +154,52 @@ public struct ModelSettings: Sendable {
         extraHeaders: [String: String]? = nil
     ) -> ModelSettings {
         var settings = self
+        applyBasicOverrides(
+            to: &settings,
+            modelName: modelName,
+            temperature: temperature,
+            topP: topP,
+            maxTokens: maxTokens,
+            responseFormat: responseFormat,
+            seed: seed,
+            additionalParameters: additionalParameters
+        )
+        applyAdvancedOverrides(
+            to: &settings,
+            frequencyPenalty: frequencyPenalty,
+            presencePenalty: presencePenalty,
+            toolChoice: toolChoice,
+            parallelToolCalls: parallelToolCalls,
+            truncation: truncation,
+            reasoning: reasoning,
+            verbosity: verbosity
+        )
+        applyMetadataOverrides(
+            to: &settings,
+            overrides: MetadataOverrides(
+                metadata: metadata,
+                store: store,
+                includeUsage: includeUsage,
+                responseInclude: responseInclude,
+                topLogprobs: topLogprobs,
+                extraQuery: extraQuery,
+                extraBody: extraBody,
+                extraHeaders: extraHeaders
+            )
+        )
+        return settings
+    }
+
+    private func applyBasicOverrides(
+        to settings: inout ModelSettings,
+        modelName: String?,
+        temperature: Double?,
+        topP: Double?,
+        maxTokens: Int?,
+        responseFormat: ResponseFormat?,
+        seed: Int?,
+        additionalParameters: [String: String]?
+    ) {
         if let modelName { settings.modelName = modelName }
         if let temperature { settings.temperature = temperature }
         if let topP { settings.topP = topP }
@@ -161,6 +207,18 @@ public struct ModelSettings: Sendable {
         if let responseFormat { settings.responseFormat = responseFormat }
         if let seed { settings.seed = seed }
         if let additionalParameters { settings.additionalParameters = additionalParameters }
+    }
+
+    private func applyAdvancedOverrides(
+        to settings: inout ModelSettings,
+        frequencyPenalty: Double?,
+        presencePenalty: Double?,
+        toolChoice: ToolChoice?,
+        parallelToolCalls: Bool?,
+        truncation: TruncationStrategy?,
+        reasoning: Reasoning?,
+        verbosity: Verbosity?
+    ) {
         if let frequencyPenalty { settings.frequencyPenalty = frequencyPenalty }
         if let presencePenalty { settings.presencePenalty = presencePenalty }
         if let toolChoice { settings.toolChoice = toolChoice }
@@ -168,21 +226,41 @@ public struct ModelSettings: Sendable {
         if let truncation { settings.truncation = truncation }
         if let reasoning { settings.reasoning = reasoning }
         if let verbosity { settings.verbosity = verbosity }
-        if let metadata { settings.metadata = metadata }
-        if let store { settings.store = store }
-        if let includeUsage { settings.includeUsage = includeUsage }
-        if let responseInclude { settings.responseInclude = responseInclude }
-        if let topLogprobs { settings.topLogprobs = topLogprobs }
-        if let extraQuery { settings.extraQuery = extraQuery }
-        if let extraBody { settings.extraBody = extraBody }
-        if let extraHeaders { settings.extraHeaders = extraHeaders }
-        return settings
+    }
+
+    private struct MetadataOverrides {
+        let metadata: [String: String]?
+        let store: Bool?
+        let includeUsage: Bool?
+        let responseInclude: [String]?
+        let topLogprobs: Int?
+        let extraQuery: [String: String]?
+        let extraBody: [String: String]?
+        let extraHeaders: [String: String]?
+    }
+
+    private func applyMetadataOverrides(to settings: inout ModelSettings, overrides: MetadataOverrides) {
+        if let metadata = overrides.metadata { settings.metadata = metadata }
+        if let store = overrides.store { settings.store = store }
+        if let includeUsage = overrides.includeUsage { settings.includeUsage = includeUsage }
+        if let responseInclude = overrides.responseInclude { settings.responseInclude = responseInclude }
+        if let topLogprobs = overrides.topLogprobs { settings.topLogprobs = topLogprobs }
+        if let extraQuery = overrides.extraQuery { settings.extraQuery = extraQuery }
+        if let extraBody = overrides.extraBody { settings.extraBody = extraBody }
+        if let extraHeaders = overrides.extraHeaders { settings.extraHeaders = extraHeaders }
     }
 
     /// Produces a new settings object by overlaying non-nil values from another instance.
     public func merged(with override: ModelSettings?) -> ModelSettings {
         guard let override else { return self }
         var merged = self
+        mergeBasicSettings(to: &merged, from: override)
+        mergeAdvancedSettings(to: &merged, from: override)
+        mergeDictionarySettings(to: &merged, from: override)
+        return merged
+    }
+
+    private func mergeBasicSettings(to merged: inout ModelSettings, from override: ModelSettings) {
         if override.modelName != self.modelName { merged.modelName = override.modelName }
         if let value = override.temperature { merged.temperature = value }
         if let value = override.topP { merged.topP = value }
@@ -191,6 +269,9 @@ public struct ModelSettings: Sendable {
         if let value = override.seed { merged.seed = value }
         if let value = override.frequencyPenalty { merged.frequencyPenalty = value }
         if let value = override.presencePenalty { merged.presencePenalty = value }
+    }
+
+    private func mergeAdvancedSettings(to merged: inout ModelSettings, from override: ModelSettings) {
         if let value = override.toolChoice { merged.toolChoice = value }
         if let value = override.parallelToolCalls { merged.parallelToolCalls = value }
         if let value = override.truncation { merged.truncation = value }
@@ -201,6 +282,9 @@ public struct ModelSettings: Sendable {
         if let value = override.includeUsage { merged.includeUsage = value }
         if let value = override.responseInclude { merged.responseInclude = value }
         if let value = override.topLogprobs { merged.topLogprobs = value }
+    }
+
+    private func mergeDictionarySettings(to merged: inout ModelSettings, from override: ModelSettings) {
         if let value = override.extraQuery {
             merged.extraQuery = merged.extraQuery?.merging(value, uniquingKeysWith: { _, new in new }) ?? value
         }
@@ -213,16 +297,29 @@ public struct ModelSettings: Sendable {
         if !override.additionalParameters.isEmpty {
             merged.additionalParameters = merged.additionalParameters.merging(override.additionalParameters) { _, new in new }
         }
-        return merged
     }
 
     /// Generates a serialisable representation compatible with provider SDKs.
     public func toDictionaryRepresentation() -> [String: Any] {
         var dict: [String: Any] = [:]
+        addBasicParametersToDictionary(&dict)
+        addAdvancedParametersToDictionary(&dict)
+        addMetadataParametersToDictionary(&dict)
+        addExtraParametersToDictionary(&dict)
+        return dict
+    }
+
+    private func addBasicParametersToDictionary(_ dict: inout [String: Any]) {
         if let temperature { dict["temperature"] = temperature }
         if let topP { dict["top_p"] = topP }
         if let frequencyPenalty { dict["frequency_penalty"] = frequencyPenalty }
         if let presencePenalty { dict["presence_penalty"] = presencePenalty }
+        if let maxTokens { dict["max_tokens"] = maxTokens }
+        if let responseFormat { dict["response_format"] = responseFormat.jsonValue }
+        if let seed { dict["seed"] = seed }
+    }
+
+    private func addAdvancedParametersToDictionary(_ dict: inout [String: Any]) {
         if let toolChoice {
             switch toolChoice {
             case .auto: dict["tool_choice"] = "auto"
@@ -233,29 +330,31 @@ public struct ModelSettings: Sendable {
         }
         if let parallelToolCalls { dict["parallel_tool_calls"] = parallelToolCalls }
         if let truncation { dict["truncation"] = truncation.rawValue }
-        if let maxTokens { dict["max_tokens"] = maxTokens }
         if let reasoning {
             var reasoningDict: [String: Any] = [:]
             if let effort = reasoning.effort { reasoningDict["effort"] = effort.rawValue }
             dict["reasoning"] = reasoningDict
         }
         if let verbosity { dict["verbosity"] = verbosity.rawValue }
+    }
+
+    private func addMetadataParametersToDictionary(_ dict: inout [String: Any]) {
         if let metadata { dict["metadata"] = metadata }
         if let store { dict["store"] = store }
         if let includeUsage { dict["include_usage"] = includeUsage }
         if let responseInclude { dict["response_include"] = responseInclude }
         if let topLogprobs { dict["top_logprobs"] = topLogprobs }
+    }
+
+    private func addExtraParametersToDictionary(_ dict: inout [String: Any]) {
         if let extraQuery { dict["extra_query"] = extraQuery }
         if let extraBody { dict["extra_body"] = extraBody }
         if let extraHeaders { dict["extra_headers"] = extraHeaders }
-        if let responseFormat { dict["response_format"] = responseFormat.jsonValue }
-        if let seed { dict["seed"] = seed }
         if !additionalParameters.isEmpty {
             for (key, value) in additionalParameters {
                 dict[key] = value
             }
         }
-        return dict
     }
 
     public enum ResponseFormat: Sendable {
