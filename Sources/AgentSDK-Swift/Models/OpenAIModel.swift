@@ -252,15 +252,15 @@ public final class OpenAIModel: ModelInterface {
         }
 
         if let topP = settings.topP {
-            request.top_p = topP
+            request.topP = topP
         }
 
         if let maxTokens = settings.maxTokens {
-            request.max_tokens = maxTokens
+            request.maxTokens = maxTokens
         }
 
         if let responseFormat = settings.responseFormat {
-            request.response_format = ["type": responseFormat.jsonValue]
+            request.responseFormat = ["type": responseFormat.jsonValue]
         }
 
         if let seed = settings.seed {
@@ -289,7 +289,7 @@ public final class OpenAIModel: ModelInterface {
         // Get tool calls if any
         var toolCalls: [ModelResponse.ToolCall] = []
 
-        if let openAIToolCalls = choice.message.tool_calls {
+        if let openAIToolCalls = choice.message.toolCalls {
             for toolCall in openAIToolCalls {
                 do {
                     let arguments = toolCall.function.arguments
@@ -311,9 +311,9 @@ public final class OpenAIModel: ModelInterface {
         var usage: ModelResponse.Usage?
         if let responseUsage = response.usage {
             usage = ModelResponse.Usage(
-                promptTokens: responseUsage.prompt_tokens,
-                completionTokens: responseUsage.completion_tokens,
-                totalTokens: responseUsage.total_tokens
+                promptTokens: responseUsage.promptTokens,
+                completionTokens: responseUsage.completionTokens,
+                totalTokens: responseUsage.totalTokens
             )
         }
 
@@ -339,9 +339,9 @@ public final class OpenAIModel: ModelInterface {
         let messages: [ChatMessage]
         let tools: [OpenAITool]?
         var temperature: Double?
-        var top_p: Double?
-        var max_tokens: Int?
-        var response_format: [String: String]?
+        var topP: Double?
+        var maxTokens: Int?
+        var responseFormat: [String: String]?
         var seed: Int?
         var stream: Bool = false
     }
@@ -356,7 +356,7 @@ public final class OpenAIModel: ModelInterface {
     private struct ChatMessage: Encodable {
         let role: String
         var content: String?
-        var tool_call_id: String?
+        var toolCallId: String?
 
         init(role: String, content: String) {
             self.role = role
@@ -365,7 +365,7 @@ public final class OpenAIModel: ModelInterface {
 
         init(role: String, toolCallId: String, content: String) {
             self.role = role
-            self.tool_call_id = toolCallId
+            self.toolCallId = toolCallId
             self.content = content
         }
     }
@@ -404,13 +404,13 @@ public final class OpenAIModel: ModelInterface {
         struct Choice: Decodable {
             let index: Int
             let message: Message
-            let finish_reason: String
+            let finishReason: String
         }
 
         struct Message: Decodable {
             let role: String
             let content: String?
-            let tool_calls: [ToolCall]?
+            let toolCalls: [ToolCall]?
         }
 
         struct ToolCall: Decodable {
@@ -425,9 +425,9 @@ public final class OpenAIModel: ModelInterface {
         }
 
         struct Usage: Decodable {
-            let prompt_tokens: Int
-            let completion_tokens: Int
-            let total_tokens: Int
+            let promptTokens: Int
+            let completionTokens: Int
+            let totalTokens: Int
         }
     }
 
@@ -442,7 +442,7 @@ public final class OpenAIModel: ModelInterface {
         struct Choice: Decodable {
             let index: Int
             let delta: Delta
-            let finish_reason: String?
+            let finishReason: String?
         }
 
         struct Delta: Decodable {

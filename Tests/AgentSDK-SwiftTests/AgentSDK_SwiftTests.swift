@@ -209,16 +209,16 @@ import Testing
         name: "add",
         description: "Adds two numbers",
         parameters: [
-            Tool.Parameter(name: "a", description: "First number", type: .number),
-            Tool.Parameter(name: "b", description: "Second number", type: .number)
+            Tool.Parameter(name: "paramA", description: "First number", type: .number),
+            Tool.Parameter(name: "paramB", description: "Second number", type: .number)
         ],
         execute: { params, _ in
             // Integer numbers might be parsed as different numeric types
             // We convert everything to Int for consistency
-            if let a = params["a"] as? Int, let b = params["b"] as? Int {
-                return a + b
-            } else if let a = params["a"] as? Double, let b = params["b"] as? Double {
-                return Int(a + b)
+            if let paramA = params["paramA"] as? Int, let paramB = params["paramB"] as? Int {
+                return paramA + paramB
+            } else if let paramA = params["paramA"] as? Double, let paramB = params["paramB"] as? Double {
+                return Int(paramA + paramB)
             } else {
                 return 0
             }
@@ -227,7 +227,7 @@ import Testing
 
     // Execute the tool
     let runContext = RunContext(value: ())
-    let result = try await calculator.invoke(parameters: ["a": 5, "b": 3], runContext: runContext)
+    let result = try await calculator.invoke(parameters: ["paramA": 5, "paramB": 3], runContext: runContext)
 
     #expect(result as? Int == 8)
 }
@@ -279,8 +279,8 @@ import Testing
 @Test func testTypedTool() async throws {
     // Define input and output using a simple struct
     struct AddInput: Codable {
-        let a: Int
-        let b: Int
+        let inputA: Int
+        let inputB: Int
     }
 
     // Create a tool with manual parameter handling
@@ -288,21 +288,21 @@ import Testing
         name: "add",
         description: "Adds two numbers",
         parameters: [
-            Tool.Parameter(name: "a", description: "First number", type: .number),
-            Tool.Parameter(name: "b", description: "Second number", type: .number)
+            Tool.Parameter(name: "inputA", description: "First number", type: .number),
+            Tool.Parameter(name: "inputB", description: "Second number", type: .number)
         ],
         execute: { params, _ in
             // Parse the parameters manually
-            guard let a = params["a"] as? Int,
-                  let b = params["b"] as? Int else {
+            guard let inputA = params["inputA"] as? Int,
+                  let inputB = params["inputB"] as? Int else {
                 return 0
             }
-            return a + b
+            return inputA + inputB
         }
     )
 
     // Execute the tool
-    let result = try await addTool.invoke(parameters: ["a": 10, "b": 20], runContext: RunContext(value: ()))
+    let result = try await addTool.invoke(parameters: ["inputA": 10, "inputB": 20], runContext: RunContext(value: ()))
 
     #expect(result as? Int == 30)
 }
