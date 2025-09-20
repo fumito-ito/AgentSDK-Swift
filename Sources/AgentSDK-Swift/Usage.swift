@@ -10,7 +10,7 @@ public struct Usage: Sendable {
     public private(set) var outputTokens: Int
     /// Combined input and output tokens across all requests.
     public private(set) var totalTokens: Int
-    
+
     /// Creates a new usage tracker.
     /// - Parameters:
     ///   - requests: Initial number of requests.
@@ -28,7 +28,7 @@ public struct Usage: Sendable {
         self.outputTokens = outputTokens
         self.totalTokens = totalTokens
     }
-    
+
     /// Adds usage details from a model response.
     /// - Parameter usage: Usage information returned by the model response.
     public mutating func add(_ usage: ModelResponse.Usage?) {
@@ -38,7 +38,7 @@ public struct Usage: Sendable {
         outputTokens += usage.completionTokens
         totalTokens += usage.totalTokens
     }
-    
+
     /// Merges another usage tracker into this one.
     /// - Parameter other: The usage to merge.
     public mutating func merge(_ other: Usage) {

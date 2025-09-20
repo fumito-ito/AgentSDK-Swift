@@ -26,7 +26,7 @@ public struct AgentRunner {
             throw RunnerError.unknownError(error)
         }
     }
-    
+
     /// Executes an agent while streaming intermediate output chunks to the supplied handler.
     /// - Parameters:
     ///   - agent: The agent to run.
@@ -60,7 +60,7 @@ public struct AgentRunner {
             throw RunnerError.unknownError(error)
         }
     }
-    
+
     private static func runStreamedInternal<Context>(
         agent: Agent<Context>,
         input: String,
@@ -74,9 +74,9 @@ public struct AgentRunner {
         guard turn < maxTurns else {
             throw Run<Context>.RunError.maxTurnsExceeded(maxTurns)
         }
-        
+
         let systemInstructions = try await agent.resolveInstructions(runContext: runContext)
-        
+
         var validatedInput = input
         for guardrail in agent.inputGuardrails {
             do {
@@ -85,7 +85,7 @@ public struct AgentRunner {
                 throw Run<Context>.RunError.guardrailError(error)
             }
         }
-        
+
         for handoff in agent.handoffs {
             if handoff.filter.shouldHandoff(input: validatedInput, context: runContext.value) {
                 let result = try await runStreamedInternal(
@@ -101,13 +101,13 @@ public struct AgentRunner {
                 return result
             }
         }
-        
+
         var messages: [Message] = []
         if let systemInstructions {
             messages.append(.system(systemInstructions))
         }
         messages.append(.user(validatedInput))
-        
+
         var currentTurn = turn
         while currentTurn < maxTurns {
             currentTurn += 1
@@ -128,7 +128,7 @@ public struct AgentRunner {
             }
             runContext.recordUsage(response.usage)
             messages.append(.assistant(response.content))
-            
+
             if response.toolCalls.isEmpty {
                 var finalOutput = response.content
                 for guardrail in agent.outputGuardrails {
@@ -144,7 +144,7 @@ public struct AgentRunner {
                     usage: runContext.usage
                 )
             }
-            
+
             let processing = try await processToolCalls(
                 toolCalls,
                 enabledTools: enabledTools,
@@ -154,7 +154,7 @@ public struct AgentRunner {
             for toolMessage in processing.messageResults {
                 messages.append(Message(role: .tool, content: .toolResults(toolMessage)))
             }
-            
+
             if let finalFromTools = try await resolveToolBehavior(
                 processing.callResults,
                 behavior: agent.toolUseBehavior,
@@ -177,10 +177,10 @@ public struct AgentRunner {
                 )
             }
         }
-        
+
         throw Run<Context>.RunError.maxTurnsExceeded(maxTurns)
     }
-    
+
     private static func processToolCalls<Context>(
         _ toolCalls: [ModelResponse.ToolCall],
         enabledTools: [Tool<Context>],
@@ -190,12 +190,12 @@ public struct AgentRunner {
         let toolMap = Dictionary(uniqueKeysWithValues: enabledTools.map { ($0.name, $0) })
         var messageResults: [MessageContent.ToolResult] = []
         var callResults: [Agent<Context>.ToolCallResult] = []
-        
+
         for toolCall in toolCalls {
             guard let tool = toolMap[toolCall.name] else {
                 throw Run<Context>.RunError.toolNotFound("Tool \(toolCall.name) not found")
             }
-            
+
             await streamHandler("\nExecuting tool: \(toolCall.name)...\n")
             do {
                 let rawResult = try await tool.invoke(
@@ -218,13 +218,13 @@ public struct AgentRunner {
                 throw Run<Context>.RunError.toolExecutionError(toolName: toolCall.name, error: error)
             }
         }
-        
+
         return ToolProcessingOutcome(
             messageResults: messageResults,
             callResults: callResults
         )
     }
-    
+
     private static func stringifyToolResult(_ result: Any) -> String {
         if let stringResult = result as? String {
             return stringResult
@@ -235,7 +235,7 @@ public struct AgentRunner {
         }
         return String(describing: result)
     }
-    
+
     private static func resolveToolBehavior<Context>(
         _ toolResults: [Agent<Context>.ToolCallResult],
         behavior: Agent<Context>.ToolUseBehavior,
@@ -257,7 +257,7 @@ public struct AgentRunner {
             return decision.isFinalOutput ? decision.finalOutput ?? toolResults.last?.output : nil
         }
     }
-    
+
     public enum RunnerError: Error {
         case modelError(ModelProvider.ModelProviderError)
         case runError(any Error)
@@ -266,7 +266,7 @@ public struct AgentRunner {
         case toolExecutionError(toolName: String, error: Error)
         case unknownError(Error)
     }
-    
+
     private struct ToolProcessingOutcome<Context> {
         let messageResults: [MessageContent.ToolResult]
         let callResults: [Agent<Context>.ToolCallResult]

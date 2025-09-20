@@ -9,7 +9,7 @@ import Testing
         name: "TestAgent",
         instructions: "You are a helpful assistant."
     )
-    
+
     #expect(agent.name == "TestAgent")
     if case .literal(let instructions)? = agent.instructions {
         #expect(instructions == "You are a helpful assistant.")
@@ -31,7 +31,7 @@ import Testing
             return params["text"] as? String ?? "No text provided"
         }
     )
-    
+
     let tool2 = Tool<Void>(
         name: "reverse",
         description: "Reverses the input",
@@ -40,10 +40,10 @@ import Testing
             return String(text.reversed())
         }
     )
-    
+
     // Create guardrails
     let inputGuardrail = AnyInputGuardrail(InputLengthGuardrail(maxLength: 100))
-    
+
     // Create model settings
     let modelSettings = ModelSettings(
         modelName: "test-model",
@@ -51,7 +51,7 @@ import Testing
         topP: 0.9,
         maxTokens: 1000
     )
-    
+
     // Create agent with all components
     let agent = Agent<Void>(
         name: "FullConfigAgent",
@@ -60,7 +60,7 @@ import Testing
         inputGuardrails: [inputGuardrail],
         modelSettings: modelSettings
     )
-    
+
     #expect(agent.name == "FullConfigAgent")
     if case .literal(let instructions)? = agent.instructions {
         #expect(instructions == "You are a comprehensive test agent.")
@@ -86,7 +86,7 @@ import Testing
             return params["text"] as? String ?? "No text provided"
         }
     )
-    
+
     let tool2 = Tool<Void>(
         name: "reverse",
         description: "Reverses the input",
@@ -95,16 +95,16 @@ import Testing
             return String(text.reversed())
         }
     )
-    
+
     // Create guardrails
     let inputGuardrail = InputLengthGuardrail(maxLength: 100)
-    
+
     // Create agent with method chaining
     let agent = Agent<Void>(name: "ChainedAgent", instructions: "You are a method-chained agent.")
         .addTool(tool1)
         .addTool(tool2)
         .addInputGuardrail(inputGuardrail)
-    
+
     #expect(agent.name == "ChainedAgent")
     #expect(agent.tools.count == 2)
     #expect(agent.inputGuardrails.count == 1)
@@ -122,10 +122,10 @@ import Testing
             return params["text"] as? String ?? ""
         }
     ))
-    
+
     // Clone the agent
     let clonedAgent = originalAgent.clone()
-    
+
     // Verify the clone has the same properties
     #expect(clonedAgent.name == originalAgent.name)
     switch (clonedAgent.instructions, originalAgent.instructions) {
@@ -138,14 +138,14 @@ import Testing
     }
     #expect(clonedAgent.tools.count == originalAgent.tools.count)
     #expect(clonedAgent.tools[0].name == originalAgent.tools[0].name)
-    
+
     // Verify that modifying the clone doesn't affect the original
     clonedAgent.addTool(Tool<Void>(
         name: "newTool",
         description: "A new tool",
         execute: { _, _ in return "result" }
     ))
-    
+
     #expect(clonedAgent.tools.count == 2)
     #expect(originalAgent.tools.count == 1)
 }
@@ -168,7 +168,7 @@ import Testing
             return params["text"] as? String ?? "No text provided"
         }
     )
-    
+
     #expect(tool.name == "echo")
     #expect(tool.description == "Echoes the input")
     #expect(tool.parameters.count == 1)
@@ -193,7 +193,7 @@ import Testing
         ],
         execute: { _, _ in return "result" }
     )
-    
+
     #expect(tool.parameters.count == 6)
     #expect(tool.parameters[0].type.jsonType == "string")
     #expect(tool.parameters[1].type.jsonType == "number")
@@ -224,11 +224,11 @@ import Testing
             }
         }
     )
-    
+
     // Execute the tool
     let runContext = RunContext(value: ())
     let result = try await calculator.invoke(parameters: ["a": 5, "b": 3], runContext: runContext)
-    
+
     #expect(result as? Int == 8)
 }
 
@@ -238,7 +238,7 @@ import Testing
         name: "TestAgent",
         instructions: "You are a helpful assistant."
     )
-    
+
     // Create a simple tool
     let tool = Tool<Void>(
         name: "echo",
@@ -247,10 +247,10 @@ import Testing
             return params["text"] as? String ?? "No text provided"
         }
     )
-    
+
     // Add tool to agent
     let updatedAgent = agent.addTool(tool)
-    
+
     #expect(updatedAgent.tools.count == 1)
     #expect(updatedAgent.tools[0].name == "echo")
 }
@@ -261,15 +261,15 @@ import Testing
         name: "TestAgent",
         instructions: "You are a helpful assistant."
     )
-    
+
     // Create tools
     let tool1 = Tool<Void>(name: "tool1", description: "First tool", execute: { _, _ in return "1" })
     let tool2 = Tool<Void>(name: "tool2", description: "Second tool", execute: { _, _ in return "2" })
     let tool3 = Tool<Void>(name: "tool3", description: "Third tool", execute: { _, _ in return "3" })
-    
+
     // Add multiple tools at once
     let updatedAgent = agent.addTools([tool1, tool2, tool3])
-    
+
     #expect(updatedAgent.tools.count == 3)
     #expect(updatedAgent.tools[0].name == "tool1")
     #expect(updatedAgent.tools[1].name == "tool2")
@@ -282,7 +282,7 @@ import Testing
         let a: Int
         let b: Int
     }
-    
+
     // Create a tool with manual parameter handling
     let addTool = Tool<Void>(
         name: "add",
@@ -300,10 +300,10 @@ import Testing
             return a + b
         }
     )
-    
+
     // Execute the tool
     let result = try await addTool.invoke(parameters: ["a": 10, "b": 20], runContext: RunContext(value: ()))
-    
+
     #expect(result as? Int == 30)
 }
 
@@ -312,12 +312,12 @@ import Testing
 @Test func testGuardrailValidation() async throws {
     // Create a simple input length guardrail
     let guardrail = InputLengthGuardrail(maxLength: 10)
-    
+
     // Test valid input
     let validInput = "Hello"
     let processedInput = try guardrail.validate(validInput, context: ())
     #expect(processedInput == validInput)
-    
+
     // Test invalid input
     let invalidInput = "This is a very long input that exceeds the maximum length"
     do {
@@ -336,12 +336,12 @@ import Testing
 @Test func testRegexContentGuardrail() async throws {
     // Create a regex guardrail to block content containing "forbidden"
     let blockingGuardrail = try RegexContentGuardrail(pattern: "forbidden", blockMatches: true)
-    
+
     // Test valid output (doesn't contain the blocked word)
     let validOutput = "This is an allowed message"
     let processedOutput = try blockingGuardrail.validate(validOutput, context: ())
     #expect(processedOutput == validOutput)
-    
+
     // Test invalid output (contains the blocked word)
     let invalidOutput = "This message contains forbidden content"
     do {
@@ -355,15 +355,15 @@ import Testing
             #expect(Bool(false), "Wrong error type")
         }
     }
-    
+
     // Create a regex guardrail to require content matching "required"
     let requiringGuardrail = try RegexContentGuardrail(pattern: "required", blockMatches: false)
-    
+
     // Test valid output (contains the required word)
     let validRequiredOutput = "This message contains required content"
     let processedRequiredOutput = try requiringGuardrail.validate(validRequiredOutput, context: ())
     #expect(processedRequiredOutput == validRequiredOutput)
-    
+
     // Test invalid output (doesn't contain the required word)
     let invalidRequiredOutput = "This message doesn't have the necessary text"
     do {
@@ -392,7 +392,7 @@ import Testing
         seed: 12345,
         additionalParameters: ["custom": "value"]
     )
-    
+
     #expect(settings.modelName == "test-model")
     #expect(settings.temperature == 0.8)
     #expect(settings.topP == 0.95)
@@ -405,7 +405,7 @@ import Testing
 @Test func testDefaultModelSettings() async throws {
     // Create model settings with defaults
     let settings = ModelSettings()
-    
+
     #expect(settings.modelName == "gpt-4.1")
     #expect(settings.temperature == nil)
     #expect(settings.topP == nil)
@@ -419,7 +419,7 @@ import Testing
     // Test JSON value for text response format
     let textFormat = ModelSettings.ResponseFormat.text
     #expect(textFormat.jsonValue == "text")
-    
+
     // Test JSON value for JSON response format
     let jsonFormat = ModelSettings.ResponseFormat.json
     #expect(jsonFormat.jsonValue == "json_object")
@@ -428,12 +428,12 @@ import Testing
 @Test func testUpdateModelSettings() async throws {
     // Create initial settings
     var settings = ModelSettings(modelName: "initial-model", temperature: 0.7)
-    
+
     // Update settings
     settings.modelName = "updated-model"
     settings.temperature = 0.9
     settings.maxTokens = 500
-    
+
     #expect(settings.modelName == "updated-model")
     #expect(settings.temperature == 0.9)
     #expect(settings.maxTokens == 500)

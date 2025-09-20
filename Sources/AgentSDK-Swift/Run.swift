@@ -4,25 +4,25 @@ import Foundation
 public final class Run<Context> {
     /// The agent being run
     public let agent: Agent<Context>
-    
+
     /// The input for the run
     public let input: String
-    
+
     /// The run context wrapper containing the caller context and usage information
     public let runContext: RunContext<Context>
-    
+
     /// The history of messages for the run
     public private(set) var messages: [Message] = []
-    
+
     /// The current state of the run
     public private(set) var state: State = .notStarted
-    
+
     /// The model used for the run
     private let model: ModelInterface
-    
+
     /// Maximum number of turns before giving up. Mirrors Python default.
     private let maxTurns: Int
-    
+
     /// Creates a new run
     /// - Parameters:
     ///   - agent: The agent to run
@@ -43,7 +43,7 @@ public final class Run<Context> {
         self.maxTurns = maxTurns
         self.runContext = RunContext(value: context)
     }
-    
+
     /// Executes the run
     /// - Returns: The result of the run
     /// - Throws: RunError if there is a problem during execution
@@ -51,14 +51,14 @@ public final class Run<Context> {
         guard state == .notStarted else {
             throw RunError.invalidState("Run has already been started")
         }
-        
+
         state = .running
-        
+
         do {
             if let systemInstructions = try await agent.resolveInstructions(runContext: runContext) {
                 messages.append(.system(systemInstructions))
             }
-            
+
             var validatedInput = input
             for guardrail in agent.inputGuardrails {
                 do {
@@ -68,7 +68,7 @@ public final class Run<Context> {
                     throw RunError.guardrailError(error)
                 }
             }
-            
+
             // Check for handoffs before running the agent
             for handoff in agent.handoffs {
                 if handoff.filter.shouldHandoff(input: validatedInput, context: runContext.value) {
@@ -86,9 +86,9 @@ public final class Run<Context> {
                     return result
                 }
             }
-            
+
             messages.append(.user(validatedInput))
-            
+
             var currentTurn = 0
             while currentTurn < maxTurns {
                 currentTurn += 1
@@ -99,7 +99,7 @@ public final class Run<Context> {
                 )
                 runContext.recordUsage(response.usage)
                 messages.append(.assistant(response.content))
-                
+
                 if response.toolCalls.isEmpty {
                     var finalOutput = response.content
                     for guardrail in agent.outputGuardrails {
@@ -113,7 +113,7 @@ public final class Run<Context> {
                     state = .completed
                     return Result(finalOutput: finalOutput, messages: messages, usage: runContext.usage)
                 }
-                
+
                 let toolProcessing = try await processToolCalls(
                     response.toolCalls,
                     availableTools: enabledTools
@@ -121,7 +121,7 @@ public final class Run<Context> {
                 for message in toolProcessing.messageResults {
                     messages.append(Message(role: .tool, content: .toolResults(message)))
                 }
-                
+
                 if let finalFromTools = try await resolveToolBehavior(
                     toolProcessing.callResults,
                     behavior: agent.toolUseBehavior
@@ -139,10 +139,10 @@ public final class Run<Context> {
                     state = .completed
                     return Result(finalOutput: finalOutput, messages: messages, usage: runContext.usage)
                 }
-                
+
                 // Continue loop with tool results appended to message history.
             }
-            
+
             state = .failed
             throw RunError.maxTurnsExceeded(maxTurns)
         } catch let error as RunError {
@@ -153,7 +153,7 @@ public final class Run<Context> {
             throw RunError.executionError(error)
         }
     }
-    
+
     private func processToolCalls(
         _ toolCalls: [ModelResponse.ToolCall],
         availableTools: [Tool<Context>]
@@ -161,12 +161,12 @@ public final class Run<Context> {
         let toolMap = Dictionary(uniqueKeysWithValues: availableTools.map { ($0.name, $0) })
         var messageResults: [MessageContent.ToolResult] = []
         var callResults: [Agent<Context>.ToolCallResult] = []
-        
+
         for toolCall in toolCalls {
             guard let tool = toolMap[toolCall.name] else {
                 throw RunError.toolNotFound("Tool \(toolCall.name) not found")
             }
-            
+
             do {
                 let result = try await tool.invoke(
                     parameters: toolCall.parameters,
@@ -187,13 +187,13 @@ public final class Run<Context> {
                 throw RunError.toolExecutionError(toolName: toolCall.name, error: error)
             }
         }
-        
+
         return ToolProcessingOutcome(
             messageResults: messageResults,
             callResults: callResults
         )
     }
-    
+
     private func stringifyToolResult(_ result: Any) -> String {
         if let stringResult = result as? String {
             return stringResult
@@ -204,7 +204,7 @@ public final class Run<Context> {
         }
         return String(describing: result)
     }
-    
+
     private func resolveToolBehavior(
         _ toolResults: [Agent<Context>.ToolCallResult],
         behavior: Agent<Context>.ToolUseBehavior
@@ -225,19 +225,19 @@ public final class Run<Context> {
             return decision.isFinalOutput ? decision.finalOutput ?? toolResults.last?.output : nil
         }
     }
-    
+
     /// Represents the result of a run
     public struct Result {
         /// The final output from the agent
         public let finalOutput: String
-        
+
         /// The complete message history for the run
         public let messages: [Message]
-        
+
         /// Aggregated usage information for the run
         public let usage: Usage
     }
-    
+
     /// Represents the state of a run
     public enum State {
         case notStarted
@@ -245,7 +245,7 @@ public final class Run<Context> {
         case completed
         case failed
     }
-    
+
     /// Errors that can occur during a run
     public enum RunError: Error {
         case invalidState(String)
@@ -255,7 +255,7 @@ public final class Run<Context> {
         case toolExecutionError(toolName: String, error: Error)
         case executionError(Error)
     }
-    
+
     private struct ToolProcessingOutcome {
         let messageResults: [MessageContent.ToolResult]
         let callResults: [Agent<Context>.ToolCallResult]

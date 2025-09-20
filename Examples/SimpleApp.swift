@@ -11,19 +11,19 @@ struct SimpleApp {
             print("Please set the OPENAI_API_KEY environment variable to your OpenAI API key")
             exit(1)
         }
-        
+
         print("🤖 AgentSDK-Swift Simple Demo")
         print("==============================")
-        
+
         try await runSimpleAgent(apiKey: apiKey)
     }
-    
+
     /// Runs a simple agent example
     /// - Parameter apiKey: OpenAI API key
     static func runSimpleAgent(apiKey: String) async throws {
         // Register models
         await ModelProvider.shared.registerOpenAIModels(apiKey: apiKey)
-        
+
         // Create a tool that calculates a sum
         let calculateTool = Tool<Void>(
             name: "calculateSum",
@@ -45,12 +45,12 @@ struct SimpleApp {
                       let b = parameters["b"] as? Double else {
                     return "Invalid numbers provided"
                 }
-                
+
                 let sum = a + b
                 return "The sum of \(a) and \(b) is \(sum)"
             }
         )
-        
+
         // Create agent with the calculation tool
         let agent = Agent<Void>(
             name: "CalculatorAssistant",
@@ -59,18 +59,18 @@ struct SimpleApp {
             When asked about calculations, use the calculateSum tool to add numbers together.
             """
         ).addTool(calculateTool)
-        
+
         // Input with streaming
         print("\nSending query: What is 42 + 17?")
-        
-        let _ = try await AgentRunner.runStreamed(
-            agent: agent, 
+
+        _ = try await AgentRunner.runStreamed(
+            agent: agent,
             input: "What is 42 + 17?",
             context: ()
         ) { content in
             print(content, terminator: "")
         }
-        
+
         print("\n\nDemo complete! 👋\n")
     }
 }

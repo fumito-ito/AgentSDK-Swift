@@ -8,12 +8,12 @@ public struct ModelSettings: Sendable {
         case none
         case named(String)
     }
-    
+
     public enum TruncationStrategy: String, Sendable, Equatable {
         case auto
         case disabled
     }
-    
+
     public struct Reasoning: Sendable, Equatable {
         public enum Effort: String, Sendable {
             case minimal
@@ -21,20 +21,20 @@ public struct ModelSettings: Sendable {
             case medium
             case high
         }
-        
+
         public var effort: Effort?
-        
+
         public init(effort: Effort? = nil) {
             self.effort = effort
         }
     }
-    
+
     public enum Verbosity: String, Sendable, Equatable {
         case low
         case medium
         case high
     }
-    
+
     /// The name of the model to use
     public var modelName: String
     /// Temperature controls randomness (0.0 to 1.0)
@@ -79,7 +79,7 @@ public struct ModelSettings: Sendable {
     public var seed: Int?
     /// Additional model-specific parameters
     public var additionalParameters: [String: String]
-    
+
     public init(
         modelName: String = "gpt-4.1",
         temperature: Double? = nil,
@@ -127,7 +127,7 @@ public struct ModelSettings: Sendable {
         self.seed = seed
         self.additionalParameters = additionalParameters
     }
-    
+
     /// Creates a copy of these settings with optional overrides
     public func with(
         modelName: String? = nil,
@@ -178,7 +178,7 @@ public struct ModelSettings: Sendable {
         if let extraHeaders { settings.extraHeaders = extraHeaders }
         return settings
     }
-    
+
     /// Produces a new settings object by overlaying non-nil values from another instance.
     public func merged(with override: ModelSettings?) -> ModelSettings {
         guard let override else { return self }
@@ -215,7 +215,7 @@ public struct ModelSettings: Sendable {
         }
         return merged
     }
-    
+
     /// Generates a serialisable representation compatible with provider SDKs.
     public func toDictionaryRepresentation() -> [String: Any] {
         var dict: [String: Any] = [:]
@@ -257,11 +257,11 @@ public struct ModelSettings: Sendable {
         }
         return dict
     }
-    
+
     public enum ResponseFormat: Sendable {
         case json
         case text
-        
+
         public var jsonValue: String {
             switch self {
             case .json: return "json_object"

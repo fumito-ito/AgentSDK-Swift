@@ -21,19 +21,19 @@ public protocol OutputGuardrail<Context>: Sendable {
 /// Type-erased wrapper for input guardrails.
 public struct AnyInputGuardrail<Context>: Sendable {
     private let validator: @Sendable (String, Context) throws -> String
-    
+
     /// Creates a type-erased wrapper around a strongly typed guardrail.
     /// - Parameter guardrail: The concrete guardrail to wrap.
     public init<G: InputGuardrail>(_ guardrail: G) where G.Context == Context {
         validator = guardrail.validate
     }
-    
+
     /// Creates a type-erased wrapper from a validation closure.
     /// - Parameter validator: Closure that performs validation for the provided context.
     public init(_ validator: @Sendable @escaping (String, Context) throws -> String) {
         self.validator = validator
     }
-    
+
     /// Validates input text using the wrapped guardrail logic.
     /// - Parameters:
     ///   - input: The input text to validate.
@@ -48,19 +48,19 @@ public struct AnyInputGuardrail<Context>: Sendable {
 /// Type-erased wrapper for output guardrails.
 public struct AnyOutputGuardrail<Context>: Sendable {
     private let validator: @Sendable (String, Context) throws -> String
-    
+
     /// Creates a type-erased wrapper around a strongly typed guardrail.
     /// - Parameter guardrail: The concrete guardrail to wrap.
     public init<G: OutputGuardrail>(_ guardrail: G) where G.Context == Context {
         validator = guardrail.validate
     }
-    
+
     /// Creates a type-erased wrapper from a validation closure.
     /// - Parameter validator: Closure that performs validation for the provided context.
     public init(_ validator: @Sendable @escaping (String, Context) throws -> String) {
         self.validator = validator
     }
-    
+
     /// Validates output text using the wrapped guardrail logic.
     /// - Parameters:
     ///   - output: The output text to validate.
@@ -77,13 +77,13 @@ public struct InputLengthGuardrail: InputGuardrail {
     public typealias Context = Void
 
     private let maxLength: Int
-    
+
     /// Creates a guardrail that enforces a maximum input length.
     /// - Parameter maxLength: The maximum number of characters permitted.
     public init(maxLength: Int) {
         self.maxLength = maxLength
     }
-    
+
     /// Validates that the provided input does not exceed the configured maximum length.
     /// - Parameters:
     ///   - input: The input text to validate.
@@ -106,7 +106,7 @@ public struct RegexContentGuardrail: OutputGuardrail {
 
     private let regex: NSRegularExpression
     private let blockMatches: Bool
-    
+
     /// Creates a guardrail that evaluates outputs against a regular expression.
     /// - Parameters:
     ///   - pattern: The regex pattern used for validation.
@@ -116,7 +116,7 @@ public struct RegexContentGuardrail: OutputGuardrail {
         self.regex = try NSRegularExpression(pattern: pattern, options: [])
         self.blockMatches = blockMatches
     }
-    
+
     /// Validates that the output satisfies the regex constraint.
     /// - Parameters:
     ///   - output: The output text to validate.
@@ -126,13 +126,13 @@ public struct RegexContentGuardrail: OutputGuardrail {
     public func validate(_ output: String, context: Context) throws -> String {
         let range = NSRange(location: 0, length: output.utf16.count)
         let matches = regex.matches(in: output, options: [], range: range)
-        
+
         if blockMatches && !matches.isEmpty {
             throw GuardrailError.invalidOutput(reason: "Output contains blocked content.")
         } else if !blockMatches && matches.isEmpty {
             throw GuardrailError.invalidOutput(reason: "Output does not contain required content.")
         }
-        
+
         return output
     }
 }

@@ -7,7 +7,7 @@ public struct Tool<Context>: Sendable {
         case always
         case disabled
         case whenEnabled(@Sendable (_ context: RunContext<Context>) async -> Bool)
-        
+
         func resolve(for context: RunContext<Context>) async -> Bool {
             switch self {
             case .always:
@@ -19,22 +19,22 @@ public struct Tool<Context>: Sendable {
             }
         }
     }
-    
+
     /// The name of the tool
     public let name: String
-    
+
     /// A description of what the tool does
     public let description: String
-    
+
     /// The parameters required by the tool
     public let parameters: [Parameter]
-    
+
     /// Availability strategy for the tool
     public let availability: Availability
-    
+
     /// The function to execute when the tool is called
     private let executeClosure: @Sendable (ToolParameters, RunContext<Context>) async throws -> Any
-    
+
     /// Creates a new tool
     /// - Parameters:
     ///   - name: The name of the tool
@@ -55,7 +55,7 @@ public struct Tool<Context>: Sendable {
         self.availability = availability
         self.executeClosure = executeClosure
     }
-    
+
     /// Convenience initializer mirroring the previous signature that only exposed context value.
     /// - Parameters:
     ///   - name: The name of the tool
@@ -79,7 +79,7 @@ public struct Tool<Context>: Sendable {
             try await execute(params, runContext.value)
         }
     }
-    
+
     /// Executes the tool with the provided parameters and context
     /// - Parameters:
     ///   - parameters: The parameters for the tool execution
@@ -91,7 +91,7 @@ public struct Tool<Context>: Sendable {
     ) async throws -> Any {
         try await executeClosure(parameters, runContext)
     }
-    
+
     /// Executes the tool with the provided parameters and context (backwards compatibility helper)
     /// - Parameters:
     ///   - parameters: The parameters for the tool execution
@@ -102,28 +102,28 @@ public struct Tool<Context>: Sendable {
         let runContext = RunContext(value: context)
         return try await invoke(parameters: parameters, runContext: runContext)
     }
-    
+
     /// Determines whether the tool is enabled for the provided run context.
     /// - Parameter runContext: The run context to check.
     /// - Returns: True if the tool may be invoked.
     public func isEnabled(for runContext: RunContext<Context>) async -> Bool {
         await availability.resolve(for: runContext)
     }
-    
+
     /// Represents a parameter for a tool
     public struct Parameter: Sendable {
         /// The name of the parameter
         public let name: String
-        
+
         /// A description of the parameter
         public let description: String
-        
+
         /// The type of the parameter
         public let type: ParameterType
-        
+
         /// Whether the parameter is required
         public let required: Bool
-        
+
         /// Creates a new parameter
         /// - Parameters:
         ///   - name: The name of the parameter
@@ -137,7 +137,7 @@ public struct Tool<Context>: Sendable {
             self.required = required
         }
     }
-    
+
     /// Represents the type of a parameter
     public enum ParameterType: Sendable {
         case string
@@ -145,7 +145,7 @@ public struct Tool<Context>: Sendable {
         case boolean
         case array
         case object
-        
+
         /// Returns the string representation of the type for OpenAI
         public var jsonType: String {
             switch self {
@@ -178,7 +178,7 @@ public func functionTool<Context, Input: Decodable, Output>(
         // Convert parameters dictionary to Input type
         let data = try JSONSerialization.data(withJSONObject: parameters)
         let input = try JSONDecoder().decode(Input.self, from: data)
-        
+
         // Call the function with the decoded input and run context
         return try await function(input, runContext)
     }
@@ -195,7 +195,7 @@ public func functionTool<Context, Input: Decodable, Output>(
         // Convert parameters dictionary to Input type
         let data = try JSONSerialization.data(withJSONObject: parameters)
         let input = try JSONDecoder().decode(Input.self, from: data)
-        
+
         // Call the function with the decoded input and context value
         return try await function(input, runContext.value)
     }

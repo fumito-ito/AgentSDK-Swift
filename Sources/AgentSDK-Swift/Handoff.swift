@@ -4,10 +4,10 @@ import Foundation
 public struct Handoff<Context> {
     /// The agent to hand off to
     public let agent: Agent<Context>
-    
+
     /// The filter to determine whether to hand off
     public let filter: any HandoffFilter<Context>
-    
+
     /// Creates a new handoff
     /// - Parameters:
     ///   - agent: The agent to hand off to
@@ -16,7 +16,7 @@ public struct Handoff<Context> {
         self.agent = agent
         self.filter = filter
     }
-    
+
     /// Creates a new handoff with a keyword filter
     /// - Parameters:
     ///   - agent: The agent to hand off to
@@ -32,10 +32,10 @@ public struct Handoff<Context> {
             keywords: keywords,
             caseSensitive: caseSensitive
         )
-        
+
         return Handoff(agent: agent, filter: filter)
     }
-    
+
     /// Creates a new handoff with a custom filter function
     /// - Parameters:
     ///   - agent: The agent to hand off to
@@ -54,7 +54,7 @@ public struct Handoff<Context> {
 public protocol HandoffFilter<Context> {
     /// The context type for the filter
     associatedtype Context
-    
+
     /// Determines whether to hand off to another agent
     /// - Parameters:
     ///   - input: The input to check
@@ -67,10 +67,10 @@ public protocol HandoffFilter<Context> {
 public struct KeywordHandoffFilter<Context>: HandoffFilter {
     /// The keywords to trigger the handoff
     private let keywords: [String]
-    
+
     /// Whether the keyword matching is case sensitive
     private let caseSensitive: Bool
-    
+
     /// Creates a new keyword handoff filter
     /// - Parameters:
     ///   - keywords: The keywords to trigger the handoff
@@ -79,7 +79,7 @@ public struct KeywordHandoffFilter<Context>: HandoffFilter {
         self.keywords = keywords
         self.caseSensitive = caseSensitive
     }
-    
+
     /// Determines whether to hand off to another agent based on keywords
     /// - Parameters:
     ///   - input: The input to check
@@ -87,14 +87,14 @@ public struct KeywordHandoffFilter<Context>: HandoffFilter {
     /// - Returns: True if the input contains any of the keywords, false otherwise
     public func shouldHandoff(input: String, context: Context) -> Bool {
         let searchInput = caseSensitive ? input : input.lowercased()
-        
+
         for keyword in keywords {
             let searchKeyword = caseSensitive ? keyword : keyword.lowercased()
             if searchInput.contains(searchKeyword) {
                 return true
             }
         }
-        
+
         return false
     }
 }
@@ -103,13 +103,13 @@ public struct KeywordHandoffFilter<Context>: HandoffFilter {
 public struct CustomHandoffFilter<Context>: HandoffFilter {
     /// The function to determine whether to hand off
     private let filterFunction: (String, Context) -> Bool
-    
+
     /// Creates a new custom handoff filter
     /// - Parameter filterFunction: The function to determine whether to hand off
     public init(filterFunction: @escaping (String, Context) -> Bool) {
         self.filterFunction = filterFunction
     }
-    
+
     /// Determines whether to hand off to another agent using the custom function
     /// - Parameters:
     ///   - input: The input to check

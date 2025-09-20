@@ -8,7 +8,7 @@ public protocol ModelInterface: Sendable {
     ///   - settings: The settings to use for the model call
     /// - Returns: The model response
     func getResponse(messages: [Message], settings: ModelSettings) async throws -> ModelResponse
-    
+
     /// Gets a streamed response from the model
     /// - Parameters:
     ///   - messages: The messages to send to the model
@@ -25,10 +25,10 @@ public protocol ModelInterface: Sendable {
 public struct Message {
     /// The role of the message sender
     public let role: Role
-    
+
     /// The content of the message
     public let content: MessageContent
-    
+
     /// Creates a new message
     /// - Parameters:
     ///   - role: The role of the message sender
@@ -37,28 +37,28 @@ public struct Message {
         self.role = role
         self.content = content
     }
-    
+
     /// Creates a new user message with text content
     /// - Parameter text: The text content
     /// - Returns: A new user message
     public static func user(_ text: String) -> Message {
         Message(role: .user, content: .text(text))
     }
-    
+
     /// Creates a new assistant message with text content
     /// - Parameter text: The text content
     /// - Returns: A new assistant message
     public static func assistant(_ text: String) -> Message {
         Message(role: .assistant, content: .text(text))
     }
-    
+
     /// Creates a new system message with text content
     /// - Parameter text: The text content
     /// - Returns: A new system message
     public static func system(_ text: String) -> Message {
         Message(role: .system, content: .text(text))
     }
-    
+
     /// Represents the role of a message sender
     public enum Role: String {
         case system
@@ -72,15 +72,15 @@ public struct Message {
 public enum MessageContent {
     case text(String)
     case toolResults(ToolResult)
-    
+
     /// Represents the result of a tool call
     public struct ToolResult {
         /// The ID of the tool call
         public let toolCallId: String
-        
+
         /// The result of the tool call
         public let result: String
-        
+
         /// Creates a new tool result
         /// - Parameters:
         ///   - toolCallId: The ID of the tool call
@@ -96,19 +96,19 @@ public enum MessageContent {
 public struct ModelResponse {
     /// The generated text content
     public let content: String
-    
+
     /// The tool calls made by the model
     public let toolCalls: [ToolCall]
-    
+
     /// Whether the response was flagged for moderation
     public let flagged: Bool
-    
+
     /// The reason the response was flagged, if applicable
     public let flaggedReason: String?
-    
+
     /// Usage statistics for the model call
     public let usage: Usage?
-    
+
     /// Creates a new model response
     /// - Parameters:
     ///   - content: The generated text content
@@ -129,18 +129,18 @@ public struct ModelResponse {
         self.flaggedReason = flaggedReason
         self.usage = usage
     }
-    
+
     /// Represents a tool call made by the model
     public struct ToolCall {
         /// The ID of the tool call
         public let id: String
-        
+
         /// The name of the tool being called
         public let name: String
-        
+
         /// The parameters for the tool call
         public let parameters: [String: Any]
-        
+
         /// Creates a new tool call
         /// - Parameters:
         ///   - id: The ID of the tool call
@@ -152,18 +152,18 @@ public struct ModelResponse {
             self.parameters = parameters
         }
     }
-    
+
     /// Represents usage statistics for a model call
     public struct Usage {
         /// The number of prompt tokens used
         public let promptTokens: Int
-        
+
         /// The number of completion tokens used
         public let completionTokens: Int
-        
+
         /// The total number of tokens used
         public let totalTokens: Int
-        
+
         /// Creates a new usage statistics object
         /// - Parameters:
         ///   - promptTokens: The number of prompt tokens used
@@ -181,10 +181,10 @@ public struct ModelResponse {
 public enum ModelStreamEvent {
     /// A content chunk was received
     case content(String)
-    
+
     /// A tool call was received
     case toolCall(ModelResponse.ToolCall)
-    
+
     /// The stream has ended
     case end
 }
@@ -193,12 +193,12 @@ public enum ModelStreamEvent {
 public actor ModelProvider {
     /// The shared instance of the model provider
     public static let shared = ModelProvider()
-    
+
     /// Dictionary mapping model names to factory functions
     private var modelFactories: [String: () -> ModelInterface] = [:]
-    
+
     private init() {}
-    
+
     /// Registers a model factory with the provider
     /// - Parameters:
     ///   - modelName: The name of the model
@@ -206,7 +206,7 @@ public actor ModelProvider {
     public func register(modelName: String, factory: @escaping () -> ModelInterface) {
         modelFactories[modelName] = factory
     }
-    
+
     /// Gets a model by name
     /// - Parameter modelName: The name of the model
     /// - Returns: The model instance
@@ -215,10 +215,10 @@ public actor ModelProvider {
         guard let factory = modelFactories[modelName] else {
             throw ModelProviderError.modelNotFound(modelName: modelName)
         }
-        
+
         return factory()
     }
-    
+
     /// Errors that can occur when using the model provider
     public enum ModelProviderError: Error {
         /// The requested model was not found

@@ -7,7 +7,7 @@ let package = Package(
     name: "AgentSDK-Swift",
     platforms: [
         .macOS(.v13),
-        .iOS(.v16),
+        .iOS(.v16)
     ],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
@@ -16,10 +16,10 @@ let package = Package(
             targets: ["AgentSDK-Swift"]),
         .executable(
             name: "SimpleApp",
-            targets: ["SimpleApp"]),
+            targets: ["SimpleApp"])
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.0.0"),
+        .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.0.0")
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -27,7 +27,7 @@ let package = Package(
         .target(
             name: "AgentSDK-Swift",
             dependencies: [
-                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
             ]),
         .executableTarget(
             name: "SimpleApp",
@@ -37,6 +37,6 @@ let package = Package(
         .testTarget(
             name: "AgentSDK-SwiftTests",
             dependencies: ["AgentSDK-Swift"]
-        ),
+        )
     ]
 )

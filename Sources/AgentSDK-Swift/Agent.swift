@@ -16,61 +16,61 @@ public final class Agent<Context> {
         case stopAtTools(Set<String>)
         case custom(@Sendable (_ context: RunContext<Context>, _ toolResults: [ToolCallResult]) async throws -> ToolsToFinalOutputResult)
     }
-    
+
     /// Wraps the outcome of processing tool calls.
     public struct ToolsToFinalOutputResult: Sendable {
         public let isFinalOutput: Bool
         public let finalOutput: String?
-        
+
         public init(isFinalOutput: Bool, finalOutput: String?) {
             self.isFinalOutput = isFinalOutput
             self.finalOutput = finalOutput
         }
     }
-    
+
     /// Captures the result of a tool invocation for decision making.
     public struct ToolCallResult: Sendable {
         public let id: String
         public let name: String
         public let output: String
-        
+
         public init(id: String, name: String, output: String) {
             self.id = id
             self.name = name
             self.output = output
         }
     }
-    
+
     /// The name of the agent, used for identification
     public let name: AgentName
-    
+
     /// Optional description used when referenced from handoffs or other agents.
     public var handoffDescription: String?
-    
+
     /// Instructions that guide the agent's behavior.
     public var instructions: AgentInstructions<Context>?
-    
+
     /// Tools available to the agent
     public private(set) var tools: [Tool<Context>]
-    
+
     /// Guardrails that enforce constraints on agent input
     public private(set) var inputGuardrails: [AnyInputGuardrail<Context>]
-    
+
     /// Guardrails that enforce constraints on agent output
     public private(set) var outputGuardrails: [AnyOutputGuardrail<Context>]
-    
+
     /// Handoffs for delegating work to other agents
     public private(set) var handoffs: [Handoff<Context>]
-    
+
     /// Settings for the model used by this agent
     public var modelSettings: ModelSettings
-    
+
     /// Determines how tool use is handled for this agent.
     public var toolUseBehavior: ToolUseBehavior
-    
+
     /// Whether to reset the tool choice back to default after a call.
     public var resetToolChoice: Bool
-    
+
     /// Creates a new agent with the specified configuration
     /// - Parameters:
     ///   - name: The name of the agent
@@ -106,7 +106,7 @@ public final class Agent<Context> {
         self.toolUseBehavior = toolUseBehavior
         self.resetToolChoice = resetToolChoice
     }
-    
+
     /// Alternate initializer for dynamic instructions while keeping other defaults.
     public init(
         name: AgentName,
@@ -131,7 +131,7 @@ public final class Agent<Context> {
         self.toolUseBehavior = toolUseBehavior
         self.resetToolChoice = resetToolChoice
     }
-    
+
     /// Adds a tool to the agent
     /// - Parameter tool: The tool to add
     /// - Returns: Self for method chaining
@@ -140,7 +140,7 @@ public final class Agent<Context> {
         tools.append(tool)
         return self
     }
-    
+
     /// Adds multiple tools to the agent
     /// - Parameter tools: The tools to add
     /// - Returns: Self for method chaining
@@ -149,21 +149,21 @@ public final class Agent<Context> {
         self.tools.append(contentsOf: tools)
         return self
     }
-    
+
     /// Adds an input guardrail to the agent.
     @discardableResult
     public func addInputGuardrail<G: InputGuardrail>(_ guardrail: G) -> Self where G.Context == Context {
         inputGuardrails.append(AnyInputGuardrail(guardrail))
         return self
     }
-    
+
     /// Adds an output guardrail to the agent.
     @discardableResult
     public func addOutputGuardrail<G: OutputGuardrail>(_ guardrail: G) -> Self where G.Context == Context {
         outputGuardrails.append(AnyOutputGuardrail(guardrail))
         return self
     }
-    
+
     /// Adds a handoff to the agent
     /// - Parameter handoff: The handoff to add
     /// - Returns: Self for method chaining
@@ -172,7 +172,7 @@ public final class Agent<Context> {
         handoffs.append(handoff)
         return self
     }
-    
+
     /// Creates a copy of this agent
     /// - Returns: A new agent with the same configuration
     public func clone(
@@ -200,7 +200,7 @@ public final class Agent<Context> {
             resetToolChoice: resetToolChoice ?? self.resetToolChoice
         )
     }
-    
+
     /// Resolves the active instructions based on the run context.
     /// - Parameter runContext: The context of the current run.
     /// - Returns: The resolved instructions, if any.
@@ -214,7 +214,7 @@ public final class Agent<Context> {
             return nil
         }
     }
-    
+
     /// Returns the tools enabled for the provided run context.
     /// - Parameter runContext: The current run context.
     /// - Returns: Enabled tools ready for invocation.
