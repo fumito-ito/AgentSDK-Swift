@@ -4,7 +4,7 @@ A Swift implementation of the OpenAI Agents SDK, allowing you to build AI agent 
 
 ## Status
 
-🚧 **Early Development** - This project is a Swift port of the [OpenAI Agents Python SDK](https://github.com/openai/openai-agents-py) and is currently in early development.
+🚧 **Early Development** - This project is a Swift port of the [OpenAI Agents Python SDK](https://github.com/openai/openai-agents-python) and is currently in early development.
 
 ## Features
 
