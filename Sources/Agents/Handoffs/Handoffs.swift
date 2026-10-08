@@ -95,6 +95,24 @@ public final class Handoff: @unchecked Sendable {
         self.isEnabled = isEnabled
     }
 
+    /// Returns a copy of this handoff (upstream `dataclasses.replace(handoff)`).
+    public func copy() -> Handoff {
+        let copied = Handoff(
+            toolName: toolName,
+            toolDescription: toolDescription,
+            inputJSONSchema: inputJSONSchema,
+            onInvokeHandoff: onInvokeHandoff,
+            agentName: agentName,
+            inputFilter: inputFilter,
+            nestHandoffHistory: nestHandoffHistory,
+            strictJSONSchema: strictJSONSchema,
+            isEnabled: isEnabled
+        )
+        copied.agentRef = agentRef
+        copied.defaultToolIdentity = defaultToolIdentity
+        return copied
+    }
+
     /// The tool output message sent after a handoff.
     public func getTransferMessage(_ agent: AgentBase) -> String {
         JSONValue.object(["assistant": .string(agent.name)]).pythonJSONString()
@@ -127,7 +145,9 @@ public func handoff(
     nestHandoffHistory: Bool? = nil,
     isEnabled: ToolEnablement = .always
 ) -> Handoff {
-    makeHandoff(
+    // An empty schema is always strict-compatible, so this cannot fail.
+    // swiftlint:disable:next force_try
+    try! makeHandoff(
         agent,
         toolNameOverride: toolNameOverride,
         toolDescriptionOverride: toolDescriptionOverride,
@@ -152,7 +172,7 @@ public func handoff<Input: Decodable & Sendable>(
     isEnabled: ToolEnablement = .always
 ) throws -> Handoff {
     let schema = try JSONSchemaGenerator.schema(for: inputType)
-    return makeHandoff(
+    return try makeHandoff(
         agent,
         toolNameOverride: toolNameOverride,
         toolDescriptionOverride: toolDescriptionOverride,
@@ -192,11 +212,11 @@ private func makeHandoff(
     inputFilter: HandoffInputFilter?,
     nestHandoffHistory: Bool?,
     isEnabled: ToolEnablement
-) -> Handoff {
+) throws -> Handoff {
     let toolName = toolNameOverride ?? Handoff.defaultToolName(agent)
     let toolDescription = toolDescriptionOverride ?? Handoff.defaultToolDescription(agent)
     // Always ensure the input JSON schema is in strict mode.
-    let strictSchema = (try? ensureStrictJSONSchema(inputJSONSchema)) ?? inputJSONSchema
+    let strictSchema = try ensureStrictJSONSchema(inputJSONSchema)
     let handoffObject = Handoff(
         toolName: toolName,
         toolDescription: toolDescription,

@@ -120,17 +120,37 @@ public enum AgentsDebug {
         dontLogToolData: flag("OPENAI_AGENTS_DONT_LOG_TOOL_DATA", default: true)
     ))
 
+    /// Task-scoped overrides for the flags, used by `withOverrides`.
+    struct Overrides: Sendable {
+        var dontLogModelData: Bool?
+        var dontLogToolData: Bool?
+    }
+
+    @TaskLocal static var overrides = Overrides()
+
     /// By default LLM inputs/outputs are not logged. Set `OPENAI_AGENTS_DONT_LOG_MODEL_DATA=0` to
     /// log them.
     public static var dontLogModelData: Bool {
-        get { state.value.dontLogModelData }
+        get { overrides.dontLogModelData ?? state.value.dontLogModelData }
         set { state.mutate { $0.dontLogModelData = newValue } }
     }
 
     /// By default tool inputs/outputs are not logged. Set `OPENAI_AGENTS_DONT_LOG_TOOL_DATA=0` to
     /// log them.
     public static var dontLogToolData: Bool {
-        get { state.value.dontLogToolData }
+        get { overrides.dontLogToolData ?? state.value.dontLogToolData }
         set { state.mutate { $0.dontLogToolData = newValue } }
+    }
+
+    /// Runs `operation` with the flags overridden for the current task and its children.
+    public static func withOverrides<T>(
+        dontLogModelData: Bool? = nil,
+        dontLogToolData: Bool? = nil,
+        _ operation: () async throws -> T
+    ) async rethrows -> T {
+        var next = overrides
+        if let dontLogModelData { next.dontLogModelData = dontLogModelData }
+        if let dontLogToolData { next.dontLogToolData = dontLogToolData }
+        return try await $overrides.withValue(next, operation: operation)
     }
 }

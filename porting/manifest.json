@@ -3323,9 +3323,11 @@
       "notes": ""
     },
     "tests/test_handoff_tool.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/HandoffToolTests.swift"
+      ],
+      "notes": "Type-enforced validation and pydantic lenient-mode cases skipped."
     },
     "tests/test_hitl_error_scenarios.py": {
       "status": "pending",

@@ -24,16 +24,22 @@ func maybeFilterModelInput(
     }
 }
 
-/// Returns the enabled handoffs for the agent.
+/// Returns the enabled handoffs for the agent. Enablement checks run concurrently; a failing
+/// check cancels its siblings.
 func getHandoffs(_ agent: Agent, _ contextWrapper: RunContextWrapper) async throws -> [Handoff] {
-    var enabled: [Handoff] = []
-    for target in agent.handoffs {
-        let resolved = target.resolved
-        if try await resolved.isEnabled.resolve(contextWrapper, agent) {
-            enabled.append(resolved)
+    let candidates = agent.handoffs.map(\.resolved)
+    guard !candidates.isEmpty else { return [] }
+    let enabled = try await withThrowingTaskGroup(of: (Int, Bool).self) { group in
+        for (index, handoff) in candidates.enumerated() {
+            group.addTask { (index, try await handoff.isEnabled.resolve(contextWrapper, agent)) }
         }
+        var flags = Array(repeating: false, count: candidates.count)
+        for try await (index, isEnabled) in group {
+            flags[index] = isEnabled
+        }
+        return flags
     }
-    return enabled
+    return zip(candidates, enabled).filter(\.1).map(\.0)
 }
 
 /// Returns the resolved output schema for the agent, if any.

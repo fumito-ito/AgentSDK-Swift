@@ -41,6 +41,25 @@ public enum JSONSchemaGenerator {
     }
 }
 
+/// `Optional` types whose wrapped type is `Decodable`.
+private protocol OptionalSchemaType {
+    static func wrappedSchema(using probe: SchemaProbe) throws -> JSONObject
+}
+
+extension Optional: OptionalSchemaType where Wrapped: Decodable {
+    fileprivate static func wrappedSchema(using probe: SchemaProbe) throws -> JSONObject {
+        try probe.schema(for: Wrapped.self)
+    }
+}
+
+/// Makes `schema` accept `null`.
+private func nullableSchema(_ schema: JSONObject) -> JSONObject {
+    if case .string(let type)? = schema["type"], schema.count == 1 {
+        return ["type": [.string(type), "null"]]
+    }
+    return ["anyOf": [.object(schema), ["type": "null"]]]
+}
+
 /// Builds schemas by decoding with dummy values.
 private final class SchemaProbe {
     private var depth = 0
@@ -53,6 +72,10 @@ private final class SchemaProbe {
         }
         if let representable = type as? JSONSchemaRepresentable.Type {
             return representable.jsonSchema
+        }
+        // A root `Optional` keeps its nullability (pydantic's `Model | None`).
+        if let optional = type as? any OptionalSchemaType.Type {
+            return nullableSchema(try optional.wrappedSchema(using: self))
         }
         if let primitive = primitiveSchema(for: type) {
             return primitive
@@ -212,10 +235,7 @@ private final class SchemaRecorder {
     }
 
     func nullable(_ schema: JSONObject) -> JSONObject {
-        if case .string(let type)? = schema["type"], schema.count == 1 {
-            return ["type": [.string(type), "null"]]
-        }
-        return ["anyOf": [.object(schema), ["type": "null"]]]
+        nullableSchema(schema)
     }
 }
 
