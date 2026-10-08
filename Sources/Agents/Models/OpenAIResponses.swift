@@ -116,8 +116,11 @@ public final class OpenAIResponsesModel: Model, @unchecked Sendable {
                                 }
                                 if responseObject?.usage == nil {
                                     response[requestWithoutUsageKey] = true
-                                    event["response"] = .object(response)
                                 }
+                                if request.modelSettings.preserveRawUsage == true {
+                                    attachRawUsageSnapshot(&response, responseObject?.usage)
+                                }
+                                event["response"] = .object(response)
                             }
                         case "response.failed", "response.incomplete":
                             terminalFailure = responseTerminalFailureError(type ?? "", event["response"]?.objectValue.flatMap(ResponseObject.init(json:)))

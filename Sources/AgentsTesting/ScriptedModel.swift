@@ -471,11 +471,11 @@ private func responseForStep(_ step: ModelStep, _ output: [TResponseOutputItem],
     var usage = responseUsageForUsage(step.usage)
     usage["_agents_sdk_normalized_usage"] = .object(serializeUsage(step.usage))
     usage["_agents_sdk_request_count"] = .int(step.usage.requests)
-    if preserveRawUsage, let rawUsage = step.rawUsage {
-        usage = rawUsage.merging(usage.filter { key, _ in key.hasPrefix("_agents_sdk") })
-    }
     var response = ResponseObject(id: step.responseId, output: output, usage: usage).json
     response["status"] = "completed"
+    if preserveRawUsage, let rawUsage = step.rawUsage {
+        attachRawUsageSnapshot(&response, rawUsage)
+    }
     return response
 }
 

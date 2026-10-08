@@ -3088,9 +3088,11 @@
       "notes": "Blocked-output, sandbox, SQLite/OpenAI conversation sessions, RunState serialization, and execute_approved_tools cases pending/skipped."
     },
     "tests/test_agent_runner_streamed.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/AgentRunnerStreamedTests.swift"
+      ],
+      "notes": "Part 1 ported (through handoff filters)."
     },
     "tests/test_agent_runner_sync.py": {
       "status": "pending",

@@ -333,3 +333,17 @@ func requestsForResponseWithoutUsage(_ response: JSONObject) -> Int {
 func strippingInternalUsageMetadata(_ usage: JSONObject) -> JSONObject {
     usage.removing(normalizedUsageKey, requestUsagesKey, requestCountKey)
 }
+
+/// The key under which a pre-normalization usage snapshot is attached to an internal response
+/// payload (upstream `_attach_raw_usage_snapshot`).
+public let rawUsageSnapshotKey = "_agents_sdk_raw_usage"
+
+/// Attaches a pre-normalization usage snapshot to an internal response payload.
+public func attachRawUsageSnapshot(_ response: inout JSONObject, _ rawUsage: JSONObject?) {
+    response[rawUsageSnapshotKey] = rawUsage.map(JSONValue.object) ?? .null
+}
+
+/// Reads an attached raw usage snapshot.
+func extractRawUsageSnapshot(_ response: JSONObject) -> JSONObject? {
+    response[rawUsageSnapshotKey]?.objectValue
+}

@@ -355,7 +355,7 @@ func runSingleTurnStreamed( // swiftlint:disable:this function_body_length
                 usage: usage,
                 responseId: terminal.id,
                 requestId: terminal.json.string(sseRequestIdKey),
-                rawUsage: modelSettings.preserveRawUsage == true ? terminal.usage.map(strippingInternalUsageMetadata) : nil
+                rawUsage: modelSettings.preserveRawUsage == true ? extractRawUsageSnapshot(terminal.json) : nil
             )
         }
         if eventType == "response.output_item.done", let item = event["item"]?.objectValue {
