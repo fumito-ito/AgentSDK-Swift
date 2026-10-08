@@ -1764,9 +1764,12 @@
       "notes": ""
     },
     "tests/conftest.py": {
-      "status": "skipped",
-      "swift": [],
-      "notes": "pytest fixtures; equivalent setup lives in Swift test helpers."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Support/TestingProcessor.swift",
+        "Makefile"
+      ],
+      "notes": "Global fixtures become the .tracing trait and Makefile test env."
     },
     "tests/docs/test_translate_docs.py": {
       "status": "skipped",
@@ -3303,9 +3306,11 @@
       "notes": ""
     },
     "tests/test_guardrails.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/GuardrailsTests.swift"
+      ],
+      "notes": "run_sync and private-task cases skipped."
     },
     "tests/test_handoff_history_duplication.py": {
       "status": "pending",
@@ -3497,9 +3502,11 @@
       "notes": ""
     },
     "tests/test_result_cast.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/ResultCastTests.swift"
+      ],
+      "notes": "release_agents/weakref cases skipped."
     },
     "tests/test_resume_tool_use_behavior.py": {
       "status": "pending",
@@ -3512,9 +3519,11 @@
       "notes": ""
     },
     "tests/test_run_config.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/RunConfigTests.swift"
+      ],
+      "notes": "Sandbox and dict-only cases skipped."
     },
     "tests/test_run_context_approvals.py": {
       "status": "pending",
@@ -3709,8 +3718,10 @@
       "notes": ""
     },
     "tests/test_tool_choice_reset.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ToolChoiceResetTests.swift"
+      ],
       "notes": ""
     },
     "tests/test_tool_context.py": {
@@ -3828,8 +3839,10 @@
       "notes": "Graphviz visualization extension."
     },
     "tests/testing_processor.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Support/TestingProcessor.swift"
+      ],
       "notes": ""
     },
     "tests/tracing/test_import_side_effects.py": {

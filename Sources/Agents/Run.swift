@@ -829,6 +829,7 @@ private final class RunDriver: @unchecked Sendable {
             outputGuardrailResults.append(contentsOf: sink.value)
         } catch {
             outputGuardrailResults.append(contentsOf: sink.value)
+            syncStreamed()
             if !(error is OutputGuardrailTripwireTriggered) {
                 try await saveFinalTurnItemsAfterGuardrails(turnSessionItems, responseId: turnResult.modelResponse.responseId)
             }

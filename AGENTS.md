@@ -68,7 +68,7 @@ make check                     # lint + build + test; run before every PR
 make upstream [VERSION=x.y.z]  # check out an upstream release into .vendor/
 ```
 
-Use `make test` rather than `swift test` directly: without Xcode, plain `swift test` cannot find the `Testing` module. Live API examples need `OPENAI_API_KEY`; never commit keys.
+Use `make test` rather than `swift test` directly: without Xcode, plain `swift test` cannot find the `Testing` module, and `make test` also disables trace export and replaces `OPENAI_API_KEY` with a dummy value so tests never reach the network. Tests that assert on traces use the `.tracing` trait (`Tests/AgentsTests/Support/TestingProcessor.swift`). Live API examples need `OPENAI_API_KEY`; never commit keys.
 
 ## Code Style
 
