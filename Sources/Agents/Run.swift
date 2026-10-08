@@ -681,11 +681,8 @@ private final class RunDriver: @unchecked Sendable {
                 $0.modelInputItems = itemsForModel
             }
             let persistInput: () async throws -> Void = { [self] in
-                guard sessionPersistenceEnabled, let items = sessionInputItemsForPersistence, !items.isEmpty else { return }
                 guard !inputGuardrailsTriggered(guardrailSink.value) else { return }
-                lastSavedInputSnapshotForRewind = items
-                try await saveResultToSession(session, originalInput: .items(items), newItems: [], runState: runState, store: storeSetting)
-                sessionInputItemsForPersistence = []
+                try await persistStreamInputIfNeeded()
             }
             return try await runSingleTurnStreamed(
                 streamedResult: streamed, agent: currentAgent, hooks: hooks, contextWrapper: contextWrapper,
@@ -707,6 +704,15 @@ private final class RunDriver: @unchecked Sendable {
             sessionItemsToRewind: !isResumedState && sessionPersistenceEnabled ? lastSavedInputSnapshotForRewind : nil,
             reasoningItemIdPolicy: reasoningItemIdPolicy, errorHandlers: errorHandlers, agentSpan: currentSpan
         )
+    }
+
+    /// Saves the run input to the session once, for streaming runs (upstream
+    /// `_persist_stream_input_if_needed`).
+    private func persistStreamInputIfNeeded() async throws {
+        guard sessionPersistenceEnabled, let items = sessionInputItemsForPersistence, !items.isEmpty else { return }
+        lastSavedInputSnapshotForRewind = items
+        try await saveResultToSession(session, originalInput: .items(items), newItems: [], runState: runState, store: storeSetting)
+        sessionInputItemsForPersistence = []
     }
 
     private func persistForGuardrailTrip() async throws {
@@ -1020,6 +1026,9 @@ private final class RunDriver: @unchecked Sendable {
         ) else {
             throw error
         }
+        if streamed != nil {
+            try await persistStreamInputIfNeeded()
+        }
         let validated = try validateHandlerFinalOutput(currentAgent, handlerResult.finalOutput)
         let synthesized = createMessageOutputItem(currentAgent, formatFinalOutputText(currentAgent, validated))
         try await runFinalOutputHooks(agent: currentAgent, hooks: hooks, contextWrapper: contextWrapper, finalOutput: validated)
@@ -1030,13 +1039,13 @@ private final class RunDriver: @unchecked Sendable {
         } catch {
             outputGuardrailResults.append(contentsOf: sink.value)
             if !(error is OutputGuardrailTripwireTriggered) {
-                try await saveMaxTurnsItems(handlerResult.includeInHistory ? [synthesized] : [])
+                _ = try await saveMaxTurnsItems(handlerResult.includeInHistory ? [synthesized] : [])
             }
+            syncStreamed()
             throw error
         }
-        if handlerResult.includeInHistory {
-            try await saveMaxTurnsItems([synthesized])
-        }
+        // The synthesized output is a new item, so the previous turn's persisted count does not apply.
+        runState.currentTurnPersistedItemCount = try await saveMaxTurnsItems(handlerResult.includeInHistory ? [synthesized] : [])
         currentTurn = maxTurns
         streamed?.update { $0.finalOutput = validated }
         if let streamed, handlerResult.includeInHistory {
@@ -1045,15 +1054,18 @@ private final class RunDriver: @unchecked Sendable {
         return makeResult(input: originalInput, finalOutput: validated, interruptions: runState.getInterruptions())
     }
 
-    private func saveMaxTurnsItems(_ items: [RunItem]) async throws {
+    /// Persists and records max-turns handler items. Returns the number of items persisted.
+    private func saveMaxTurnsItems(_ items: [RunItem]) async throws -> Int {
+        var saved = 0
         if sessionPersistenceEnabled, !items.isEmpty, !inputGuardrailsTriggered(attemptInputGuardrailResults) {
-            try await saveResultToSession(
+            saved = try await saveResultToSession(
                 session, originalInput: .items([]), newItems: items, runState: nil,
                 reasoningItemIdPolicy: reasoningItemIdPolicy, store: storeSetting
             )
         }
-        guard !items.isEmpty else { return }
+        guard !items.isEmpty else { return saved }
         generatedItems.append(contentsOf: items)
         sessionItems.append(contentsOf: items)
+        return saved
     }
 }

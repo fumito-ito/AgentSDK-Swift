@@ -3041,9 +3041,11 @@
       "notes": ""
     },
     "tests/test_agent_config.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/AgentConfigTests.swift"
+      ],
+      "notes": "Runtime type-validation tests skipped (compiler-enforced)."
     },
     "tests/test_agent_hooks.py": {
       "status": "pending",
@@ -3386,9 +3388,11 @@
       "notes": ""
     },
     "tests/test_max_turns.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/MaxTurnsTests.swift"
+      ],
+      "notes": "SQLiteSession and RunState serialization cases pending."
     },
     "tests/test_mcp_tool_metadata.py": {
       "status": "pending",
@@ -3755,9 +3759,11 @@
       "notes": ""
     },
     "tests/test_tool_use_behavior.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ToolUseBehaviorTests.swift"
+      ],
+      "notes": "Invalid enum/return cases skipped."
     },
     "tests/test_tool_use_tracker.py": {
       "status": "pending",
@@ -3892,8 +3898,10 @@
       "notes": ""
     },
     "tests/utils/simple_session.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Utils/SimpleSession.swift"
+      ],
       "notes": ""
     },
     "tests/utils/test_json.py": {

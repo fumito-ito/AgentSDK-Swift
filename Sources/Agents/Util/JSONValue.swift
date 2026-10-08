@@ -398,8 +398,13 @@ extension JSONValue: CustomStringConvertible {
 // MARK: - Bridging Codable values
 
 extension JSONValue {
-    /// Encodes any `Encodable` value into a `JSONValue`.
-    public init<T: Encodable>(encoding value: T, encoder: JSONEncoder = JSONEncoder()) throws {
+    /// Encodes any `Encodable` value into a `JSONValue`, preserving key encoding order.
+    public init<T: Encodable>(encoding value: T) throws {
+        self = try JSONValueEncoder().encode(value)
+    }
+
+    /// Encodes any `Encodable` value into a `JSONValue` using a configured `JSONEncoder`.
+    public init<T: Encodable>(encoding value: T, encoder: JSONEncoder) throws {
         let data = try encoder.encode(value)
         self = try JSONValue.parse(data)
     }

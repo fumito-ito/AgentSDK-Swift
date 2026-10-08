@@ -337,6 +337,17 @@ public struct ModelSettings: Sendable, Equatable {
         }
     }
 
+    /// Fields of the OpenAI `ContextManagement` and `PromptCacheOptions` request types.
+    static let contextManagementFields: Set<String> = ["type", "compact_threshold"]
+    static let promptCacheOptionFields: Set<String> = ["mode", "ttl"]
+
+    private static func validateFields(_ value: JSONObject, allowed: Set<String>, label: String) throws {
+        let unknown = value.keys.filter { !allowed.contains($0) }.sorted()
+        if !unknown.isEmpty {
+            throw TypeError("Unknown model settings in \(label): \(unknown.joined(separator: ", "))")
+        }
+    }
+
     /// Deserializes settings from their JSON dictionary form. Unknown fields raise `TypeError`.
     public init(json: JSONObject) throws {
         let unknown = json.keys.filter { !Self.fieldNames.contains($0) }.sorted()
@@ -400,7 +411,13 @@ public struct ModelSettings: Sendable, Equatable {
             retry = ModelRetrySettings(maxRetries: retryObject["max_retries"]?.intValue, backoff: backoff)
         }
         contextManagement = json["context_management"]?.arrayValue?.compactMap(\.objectValue)
+        for (index, entry) in (contextManagement ?? []).enumerated() {
+            try Self.validateFields(entry, allowed: Self.contextManagementFields, label: "context_management[\(index)]")
+        }
         promptCacheOptions = json["prompt_cache_options"]?.objectValue
+        if let promptCacheOptions {
+            try Self.validateFields(promptCacheOptions, allowed: Self.promptCacheOptionFields, label: "prompt_cache_options")
+        }
         preserveRawUsage = json["preserve_raw_usage"]?.boolValue
         timeout = json["timeout"]?.doubleValue
         if let timeout, !(timeout > 0 && timeout.isFinite) {

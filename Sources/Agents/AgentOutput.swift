@@ -1,6 +1,6 @@
 import Foundation
 
-private let wrapperDictKey = "response"
+let wrapperDictKey = "response"
 
 /// Captures the JSON schema of the output, and validates/parses JSON produced by the LLM into the
 /// output type.
@@ -23,7 +23,12 @@ public protocol AgentOutputSchemaBase: Sendable {
 /// Swift: upstream wraps types that are not JSON objects (for example `list[str]`) in
 /// `{"response": ...}`. Here, types whose generated schema is not an object are wrapped the same
 /// way.
-public struct AgentOutputSchema<Output: Decodable & Sendable>: AgentOutputSchemaBase {
+/// Output schemas that wrap non-object types in `{"response": ...}`.
+protocol WrappedOutputSchema {
+    var isWrapped: Bool { get }
+}
+
+public struct AgentOutputSchema<Output: Decodable & Sendable>: AgentOutputSchemaBase, WrappedOutputSchema {
     /// Whether the output type is wrapped in `{"response": ...}`.
     public let isWrapped: Bool
     private let outputSchema: JSONObject

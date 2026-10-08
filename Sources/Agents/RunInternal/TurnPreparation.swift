@@ -249,28 +249,29 @@ func buildRunErrorData(
     )
 }
 
+/// Wraps a handler final output in `{"response": ...}` when the output schema is wrapped.
+private func handlerPayloadValue(_ schema: any AgentOutputSchemaBase, _ finalOutput: any Sendable) throws -> JSONValue {
+    let value = try jsonDump(finalOutput)
+    guard (schema as? any WrappedOutputSchema)?.isWrapped == true else { return value }
+    if case .object(let object) = value, object[wrapperDictKey] != nil { return value }
+    return .object([wrapperDictKey: value])
+}
+
 /// Formats a final output as message text for history.
 func formatFinalOutputText(_ agent: Agent, _ finalOutput: any Sendable) -> String {
     guard let schema = getOutputSchema(agent) else { return stringify(finalOutput) }
-    _ = schema
-    if let json = try? jsonDump(finalOutput) {
-        if case .string(let string) = json { return string }
-        return json.jsonString()
-    }
-    return stringify(finalOutput)
+    guard let payload = try? handlerPayloadValue(schema, finalOutput) else { return stringify(finalOutput) }
+    return payload.jsonString()
 }
 
 /// Validates an error handler's final output against the agent's output schema.
 func validateHandlerFinalOutput(_ agent: Agent, _ finalOutput: any Sendable) throws -> any Sendable {
     guard let schema = getOutputSchema(agent) else { return finalOutput }
     let payload: String
-    if let string = finalOutput as? String {
-        payload = string
-    } else {
-        guard let json = try? jsonDump(finalOutput) else {
-            throw UserError("Invalid run error handler final_output for structured output.")
-        }
-        payload = json.jsonString()
+    do {
+        payload = try handlerPayloadValue(schema, finalOutput).jsonString()
+    } catch {
+        throw UserError("Invalid run error handler final_output for structured output.")
     }
     do {
         return try schema.validateJSON(payload)
