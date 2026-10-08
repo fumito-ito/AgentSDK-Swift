@@ -28,10 +28,10 @@ final class OpenAIServerConversationTracker: @unchecked Sendable {
 
     private(set) var sentInitialInput = false
     private var remainingInitialInput: [TResponseInputItem]?
-    private(set) var serverItemIds: Set<String> = []
+    var serverItemIds: Set<String> = []
     private var serverToolCallIds: Set<String> = []
     private var serverItemFingerprints: Set<String> = []
-    private var sentItemFingerprints: Set<String> = []
+    var sentItemFingerprints: Set<String> = []
     private var sentRunItems: Set<ObjectIdentifier> = []
     /// Prepared input fingerprint → source run items, in preparation order.
     private var preparedSources: [String: [ObjectIdentifier]] = [:]

@@ -377,6 +377,7 @@ func executeHandoffs(
     let actual = runHandoffs[0]
     let span = handoffSpan(fromAgent: agent.name)
     var sessionStepItems: [RunItem]?
+    var nestedHistoryOwnedItems: [RunItem]?
     let newAgent: Agent = try await span.run {
         let handoff = actual.handoff
         let target = try await handoff.onInvokeHandoff(contextWrapper, actual.toolCall.arguments)
@@ -417,6 +418,7 @@ func executeHandoffs(
         if let inputFilter {
             logger.debug("Filtering handoff inputs for \(agent.name) -> \(newAgent.name)")
             let filtered = try await inputFilter(data)
+            nestedHistoryOwnedItems = []
             originalInput = filtered.inputHistory
             preStepItems = filtered.preHandoffItems
             newStepItems = filtered.newItems
@@ -425,7 +427,8 @@ func executeHandoffs(
                 newStepItems = inputItems
             }
         } else if shouldNest {
-            let nested = try nestHandoffHistory(data, historyMapper: runConfig.handoffHistoryMapper)
+            let (nested, owned) = try nestHandoffHistoryWithProvenance(data, historyMapper: runConfig.handoffHistoryMapper)
+            nestedHistoryOwnedItems = owned.map(\.runItem)
             originalInput = nested.inputHistory
             preStepItems = nested.preHandoffItems
             sessionStepItems = nested.newItems
@@ -441,7 +444,8 @@ func executeHandoffs(
         nextStep: .handoff(newAgent),
         toolInputGuardrailResults: toolInputGuardrailResults,
         toolOutputGuardrailResults: toolOutputGuardrailResults,
-        sessionStepItems: sessionStepItems
+        sessionStepItems: sessionStepItems,
+        nestedHistoryOwnedItems: nestedHistoryOwnedItems
     )
 }
 

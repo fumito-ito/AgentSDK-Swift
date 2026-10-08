@@ -41,41 +41,27 @@ func prepareInputWithSession(
     let preparedRaw: [TResponseInputItem]
     var appendedItems: [TResponseInputItem]
 
+    // Without history in the prepared input, the callback is not consulted (as upstream).
     if let sessionInputCallback, includeHistoryInPreparedInput {
         let combined = try await sessionInputCallback(convertedHistory, newInputList)
         var historyCounts = frequencyMap(convertedHistory)
         var newCounts = frequencyMap(newInputList)
         appendedItems = []
+        // Swift: upstream matches by object identity first; values have none, so this applies
+        // upstream's content fallback (history before new input). See porting/decisions.md D11.
         for (index, item) in combined.enumerated() {
             let key = sessionItemKey(item)
-            if let count = newCounts[key], count > 0 {
-                newCounts[key] = count - 1
-                appendedItems.append(item)
-            } else if let count = historyCounts[key], count > 0 {
+            if let count = historyCounts[key], count > 0 {
                 historyCounts[key] = count - 1
                 pruneHistoryIndexes.insert(index)
+            } else if let count = newCounts[key], count > 0 {
+                newCounts[key] = count - 1
+                appendedItems.append(item)
             } else {
                 appendedItems.append(item)
             }
         }
         preparedRaw = combined
-    } else if let sessionInputCallback {
-        let combined = try await sessionInputCallback(convertedHistory, newInputList)
-        var historyCounts = frequencyMap(convertedHistory)
-        appendedItems = []
-        for item in combined {
-            let key = sessionItemKey(item)
-            if let count = historyCounts[key], count > 0 {
-                historyCounts[key] = count - 1
-                continue
-            }
-            appendedItems.append(item)
-        }
-        if !appendedItems.isEmpty {
-            preparedRaw = appendedItems
-        } else {
-            preparedRaw = preserveDroppedNewItems ? newInputList : []
-        }
     } else {
         preparedRaw = includeHistoryInPreparedInput ? convertedHistory + newInputList : newInputList
         appendedItems = newInputList
@@ -212,32 +198,150 @@ func saveResumedTurnItems(
     return persistedCount + saved
 }
 
-/// Best-effort rollback of items recently persisted to a session before a conversation retry.
-func rewindSessionItems(_ session: (any Session)?, _ items: [TResponseInputItem]) async {
+/// Best-effort rollback of items recently persisted to a session before a conversation retry, so
+/// conversation-lock retries do not accumulate duplicate inputs.
+func rewindSessionItems(_ session: (any Session)?, _ items: [TResponseInputItem], _ serverTracker: OpenAIServerConversationTracker? = nil) async {
     guard let session, !items.isEmpty else { return }
-    var expected = items.map { fingerprintInputItem($0) }
-    logger.debug("Rewinding session items due to conversation retry (targets=\(expected.count))")
+    let ignoreIds = session.ignoreIdsForMatching
+    let targets = items.map { fingerprintInputItem($0, ignoreIdsForMatching: ignoreIds) }
+    logger.debug("Rewinding session items due to conversation retry (targets=\(targets.count))")
+    if !(AgentsDebug.dontLogModelData || AgentsDebug.dontLogToolData) {
+        for (index, target) in targets.enumerated() {
+            logger.debug("Rewind target \(index) (first 300 chars): \(target.prefix(300))")
+        }
+    }
+    let rewound = await rewindSessionTailSuffix(
+        session: session,
+        expected: targets,
+        ignoreIds: ignoreIds,
+        mismatchWarning: "Skipping session rewind because the current tail does not match the retry-owned suffix",
+        popFailureWarning: "Failed to rewind session item"
+    )
+    guard rewound else { return }
+    await waitForSessionCleanup(session, targets, ignoreIds: ignoreIds)
+    guard let serverTracker else { return }
+
+    let latest: [TResponseInputItem]
+    do {
+        latest = try await session.getItems(limit: 1)
+    } catch {
+        logActionError("Failed to peek session items while rewinding", error, isToolAction: false)
+        return
+    }
+    guard let latestItem = latest.first else { return }
+    if let id = latestItem.string("id"), serverTracker.serverItemIds.contains(id) { return }
+    let sessionItems: [TResponseInputItem]
+    do {
+        sessionItems = try await session.getItems(limit: nil)
+    } catch {
+        logActionError("Failed to inspect session tail while stripping stray items", error, isToolAction: false)
+        return
+    }
+    let stray = collectRetryOwnedTailSerializations(sessionItems, serverTracker: serverTracker, ignoreIds: ignoreIds)
+    guard !stray.isEmpty else { return }
+    logger.debug("Stripping \(stray.count) retry-owned conversation items until the session tail reaches a known server item")
+    _ = await rewindSessionTailSuffix(
+        session: session,
+        expected: stray,
+        ignoreIds: ignoreIds,
+        mismatchWarning: "Skipping stray session cleanup because the current tail no longer matches retry-owned conversation items",
+        popFailureWarning: "Failed to strip stray session item"
+    )
+}
+
+/// Confirms rewound items no longer appear in the session tail before the next retry.
+func waitForSessionCleanup(_ session: (any Session)?, _ targets: [String], maxAttempts: Int = 5, ignoreIds: Bool = false) async {
+    guard let session, !targets.isEmpty else { return }
+    let window = targets.count + 2
+    for attempt in 0..<maxAttempts {
+        do {
+            let tail = Set(try await session.getItems(limit: window).map { fingerprintInputItem($0, ignoreIdsForMatching: ignoreIds) })
+            if !targets.contains(where: tail.contains) { return }
+        } catch {
+            logger.debug("Failed to verify session cleanup (attempt \(attempt + 1)): \(errorTypeName(error))")
+        }
+        try? await Task.sleep(nanoseconds: UInt64(0.1 * Double(attempt + 1) * 1_000_000_000))
+    }
+    logger.debug("Session cleanup verification exhausted attempts; targets may still linger temporarily")
+}
+
+/// Removes an exact serialized suffix from the session tail, aborting when the tail diverges.
+private func rewindSessionTailSuffix(
+    session: any Session,
+    expected: [String],
+    ignoreIds: Bool,
+    mismatchWarning: String,
+    popFailureWarning: String
+) async -> Bool {
+    guard !expected.isEmpty else { return true }
+    let tail: [TResponseInputItem]
+    do {
+        tail = try await session.getItems(limit: expected.count)
+    } catch {
+        logActionWarning(popFailureWarning, error)
+        return false
+    }
+    guard tail.count == expected.count, tail.map({ fingerprintInputItem($0, ignoreIdsForMatching: ignoreIds) }) == expected else {
+        logger.warning(mismatchWarning)
+        return false
+    }
     var popped: [TResponseInputItem] = []
-    while let target = expected.last {
+    for target in expected.reversed() {
         let item: TResponseInputItem?
         do {
             item = try await session.popItem()
         } catch {
-            logger.warning("Failed to rewind session item: \(describeError(error))")
-            break
+            await restorePoppedSessionItems(session, popped)
+            logActionWarning(popFailureWarning, error)
+            return false
         }
-        guard let item else { break }
-        guard fingerprintInputItem(item) == target else {
-            logger.warning("Skipping session rewind because the current tail does not match the retry-owned suffix")
-            popped.append(item)
-            break
+        guard let item else {
+            await restorePoppedSessionItems(session, popped)
+            logger.warning(mismatchWarning)
+            return false
         }
-        expected.removeLast()
+        popped.append(item)
+        if fingerprintInputItem(item, ignoreIdsForMatching: ignoreIds) != target {
+            await restorePoppedSessionItems(session, popped)
+            logger.warning(mismatchWarning)
+            return false
+        }
     }
-    // Restore anything popped that was not part of the retry-owned suffix.
-    if !popped.isEmpty {
-        try? await session.addItems(popped.reversed())
+    return true
+}
+
+private func restorePoppedSessionItems(_ session: any Session, _ popped: [TResponseInputItem]) async {
+    guard !popped.isEmpty else { return }
+    do {
+        try await session.addItems(popped.reversed())
+    } catch {
+        logActionWarning("Failed to restore session items after a rewind mismatch", error)
     }
+}
+
+/// Returns the contiguous retry-owned tail suffix that can be safely stripped.
+func collectRetryOwnedTailSerializations(
+    _ sessionItems: [TResponseInputItem],
+    serverTracker: OpenAIServerConversationTracker,
+    ignoreIds: Bool
+) -> [String] {
+    var strayTail: [String] = []
+    for item in sessionItems.reversed() {
+        if let id = item.string("id"), serverTracker.serverItemIds.contains(id) {
+            return strayTail.reversed()
+        }
+        let serialized = fingerprintInputItem(item, ignoreIdsForMatching: ignoreIds)
+        if serverTracker.sentItemFingerprints.contains(serialized) {
+            strayTail.append(serialized)
+            continue
+        }
+        logger.warning("Skipping stray session cleanup because the current tail contains items unrelated to this retry")
+        return []
+    }
+    if !strayTail.isEmpty {
+        logger.warning("Skipping stray session cleanup because no known server item was found before the session boundary")
+    }
+    return []
 }
 
 /// Raises when a session is combined with server-managed conversation settings.

@@ -107,6 +107,9 @@ struct SingleStepResult: Sendable {
     /// Full unfiltered items for session history, used instead of `newStepItems` when set.
     var sessionStepItems: [RunItem]?
     var outputGuardrailResults: [OutputGuardrailResult] = []
+    /// Run items copied verbatim into nested input history by this step, or `nil` when the step
+    /// did not rewrite the input history.
+    var nestedHistoryOwnedItems: [RunItem]?
     /// The processed model response, needed for resuming from interruptions.
     var processedResponse: ProcessedResponse?
 

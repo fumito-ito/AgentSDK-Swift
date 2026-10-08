@@ -32,6 +32,9 @@ public protocol Session: AnyObject, Sendable {
     var sessionId: String { get }
     /// Default settings for this session.
     var sessionSettings: SessionSettings? { get }
+    /// Whether item IDs are ignored when matching persisted items (upstream
+    /// `_ignore_ids_for_matching`). Defaults to `false`.
+    var ignoreIdsForMatching: Bool { get }
     /// Retrieves the conversation history. With `limit`, returns the latest N items in
     /// chronological order.
     func getItems(limit: Int?) async throws -> [TResponseInputItem]
@@ -45,6 +48,9 @@ public protocol Session: AnyObject, Sendable {
 
 extension Session {
     public var sessionSettings: SessionSettings? { nil }
+
+    /// Whether item IDs are ignored when matching persisted items, for stores that reassign IDs.
+    public var ignoreIdsForMatching: Bool { false }
 
     public func getItems() async throws -> [TResponseInputItem] {
         try await getItems(limit: nil)

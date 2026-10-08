@@ -58,3 +58,9 @@ Swift-specific deviations from openai-agents-python. Each entry records what dif
 
 - **Decision:** When two upstream modules share a basename within one Swift target, the nested one gets a prefixed name: `run_internal/items.py` → `RunInternal/RunInternalItems.swift`.
 - **Why:** Swift Package Manager rejects two sources with the same basename in one target.
+
+## D11. Session input callbacks are matched by content
+
+- **Decision:** After a `sessionInputCallback` combines history and new input, the runner decides which returned items are new (and must be persisted) by content: each returned item first consumes a matching history occurrence, then a matching new-input occurrence; anything else is new.
+- **Why:** Upstream matches by object identity first, including items the callback mutated in place inside the history list it received. Swift session items are values, so identity and in-place mutation are not observable.
+- **Apply:** Upstream tests that depend on identity (repeated equal history objects, history items moved into the new-input list, in-place history replacement) are skipped.

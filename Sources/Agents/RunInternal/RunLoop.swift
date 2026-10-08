@@ -220,7 +220,7 @@ func getNewResponse(
         getResponse: { try await model.getResponse(request) },
         rewind: {
             guard let serverConversationTracker else { return }
-            await rewindSessionItems(session, sessionItemsToRewind ?? [])
+            await rewindSessionItems(session, sessionItemsToRewind ?? [], serverConversationTracker)
             serverConversationTracker.rewindInput(filteredInput)
         },
         retrySettings: modelSettings.retry,

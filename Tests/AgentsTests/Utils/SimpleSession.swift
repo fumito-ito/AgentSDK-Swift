@@ -7,6 +7,8 @@ import Foundation
 class SimpleListSession: Session, @unchecked Sendable {
     let sessionId: String
     var sessionSettings: SessionSettings?
+    /// Some session implementations strip IDs on write; subclasses opt in by overriding.
+    var ignoreIdsForMatching: Bool { false }
     private let lock = NSLock()
     private var items: [TResponseInputItem]
 
@@ -52,6 +54,8 @@ class CountingSession: SimpleListSession, @unchecked Sendable {
 
 /// Session that strips IDs on add to mimic hosted stores that reassign IDs.
 final class IdStrippingSession: CountingSession, @unchecked Sendable {
+    override var ignoreIdsForMatching: Bool { true }
+
     override func addItems(_ newItems: [TResponseInputItem]) async throws {
         try await super.addItems(newItems.map { $0.removing("id") })
     }

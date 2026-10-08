@@ -52,6 +52,26 @@ protocol RunResultReplayData {
     var modelInputItems: [RunItem] { get }
     var replayFromModelInputItems: Bool { get }
     var reasoningItemIdPolicy: ReasoningItemIdPolicy? { get }
+    /// Session items also present verbatim in the nested input history.
+    var nestedHistoryOwnedItems: [RunItem] { get }
+}
+
+/// Drops `newItems` occurrences that `input` already carries verbatim as nested history.
+func excludingNestedHistoryOwnedItems(_ newItems: [RunItem], owned: [RunItem], input: RunInput, policy: ReasoningItemIdPolicy?) -> [RunItem] {
+    guard !owned.isEmpty, case .items(let inputItems) = input else { return newItems }
+    var available: [String: Int] = [:]
+    for item in inputItems {
+        available[fingerprintInputItem(item), default: 0] += 1
+    }
+    let ownedIds = Set(owned.map { ObjectIdentifier($0) })
+    return newItems.filter { item in
+        guard ownedIds.contains(ObjectIdentifier(item)),
+              let converted = try? runItemToInputItem(item, reasoningItemIdPolicy: policy) else { return true }
+        let key = fingerprintInputItem(converted)
+        guard let count = available[key], count > 0 else { return true }
+        available[key] = count - 1
+        return false
+    }
 }
 
 extension RunResultBase {
@@ -75,7 +95,8 @@ extension RunResultBase {
         let replayItems: [TResponseInputItem]
         switch mode {
         case .preserveAll:
-            replayItems = try runItemsToInputItems(newItems, reasoningItemIdPolicy: policy)
+            let retained = excludingNestedHistoryOwnedItems(newItems, owned: replay?.nestedHistoryOwnedItems ?? [], input: input, policy: policy)
+            replayItems = try runItemsToInputItems(retained, reasoningItemIdPolicy: policy)
         case .normalized:
             let source = (replay?.replayFromModelInputItems ?? false) ? (replay?.modelInputItems ?? newItems) : newItems
             replayItems = try runItemsToInputItems(source, reasoningItemIdPolicy: policy)
@@ -156,6 +177,7 @@ public final class RunResult: RunResultBase, RunResultReplayData, @unchecked Sen
     var modelInputItems: [RunItem] = []
     var replayFromModelInputItems = false
     var reasoningItemIdPolicy: ReasoningItemIdPolicy?
+    var nestedHistoryOwnedItems: [RunItem] = []
     var stateFields = ResultStateFields()
 
     init(
@@ -246,6 +268,7 @@ public final class RunResultStreaming: RunResultBase, RunResultReplayData, @unch
         var modelInputItems: [RunItem] = []
         var replayFromModelInputItems = false
         var reasoningItemIdPolicy: ReasoningItemIdPolicy?
+        var nestedHistoryOwnedItems: [RunItem] = []
         var stateFields = ResultStateFields()
         var trace: (any Trace)?
     }
@@ -302,6 +325,7 @@ public final class RunResultStreaming: RunResultBase, RunResultReplayData, @unch
     var modelInputItems: [RunItem] { read(\.modelInputItems) }
     var replayFromModelInputItems: Bool { read(\.replayFromModelInputItems) }
     var reasoningItemIdPolicy: ReasoningItemIdPolicy? { read(\.reasoningItemIdPolicy) }
+    var nestedHistoryOwnedItems: [RunItem] { read(\.nestedHistoryOwnedItems) }
     var cancelMode: StreamCancelMode? { read(\.cancelMode) }
 
     /// The error raised by the run loop, if any.

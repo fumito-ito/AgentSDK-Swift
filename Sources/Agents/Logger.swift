@@ -108,6 +108,16 @@ func logActionError(_ message: String, _ error: any Error, isToolAction: Bool) {
     }
 }
 
+/// Logs a model-and-tool action warning with redaction applied when data logging is disabled
+/// (upstream `log_model_and_tool_action_warning`).
+func logActionWarning(_ message: String, _ error: any Error) {
+    if AgentsDebug.dontLogModelData || AgentsDebug.dontLogToolData {
+        logger.warning("\(message): \(errorTypeName(error))")
+    } else {
+        logger.warning("\(message): \(describeError(error))")
+    }
+}
+
 /// Debug flags read from the environment (src/agents/_debug.py).
 public enum AgentsDebug {
     private static func flag(_ name: String, default defaultValue: Bool) -> Bool {

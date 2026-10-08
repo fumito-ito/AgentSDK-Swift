@@ -309,6 +309,7 @@ private final class RunDriver: @unchecked Sendable {
     var toolInputGuardrailResults: [ToolInputGuardrailResult] = []
     var toolOutputGuardrailResults: [ToolOutputGuardrailResult] = []
     var currentAgent: Agent
+    var nestedHistoryOwnedItems: [RunItem] = []
     var currentSpan: (any Span)?
     var shouldRunAgentStartHooks = true
 
@@ -520,7 +521,9 @@ private final class RunDriver: @unchecked Sendable {
         let toolInputResults = toolInputGuardrailResults
         let toolOutputResults = toolOutputGuardrailResults
         let policy = reasoningItemIdPolicy
+        let owned = nestedHistoryOwnedItems
         streamed.update {
+            $0.nestedHistoryOwnedItems = owned
             $0.input = input
             $0.newItems = items
             $0.modelInputItems = modelInput
@@ -729,6 +732,7 @@ private final class RunDriver: @unchecked Sendable {
     private func handleTurnResult(_ turnResult: SingleStepResult) async throws -> TurnOutcome {
         modelResponses.append(turnResult.modelResponse)
         originalInput = turnResult.originalInput
+        if let owned = turnResult.nestedHistoryOwnedItems { nestedHistoryOwnedItems = owned }
         generatedItems = turnResult.preStepItems + turnResult.newStepItems
         let turnSessionItems = sessionItemsForTurn(turnResult)
         sessionItems.append(contentsOf: turnSessionItems)
@@ -872,6 +876,7 @@ private final class RunDriver: @unchecked Sendable {
         result.modelInputItems = generatedItems
         result.replayFromModelInputItems = !Self.sameItems(generatedItems, sessionItems)
         result.reasoningItemIdPolicy = reasoningItemIdPolicy
+        result.nestedHistoryOwnedItems = nestedHistoryOwnedItems
         result.stateFields = ResultStateFields(
             currentTurn: currentTurn,
             lastProcessedResponse: processedResponse,
@@ -942,6 +947,7 @@ private final class RunDriver: @unchecked Sendable {
         }
         toolUseTracker.recordProcessedResponse(currentAgent, processed)
         originalInput = turnResult.originalInput
+        if let owned = turnResult.nestedHistoryOwnedItems { nestedHistoryOwnedItems = owned }
         let (resumedGenerated, turnSessionItems) = resumedTurnItems(turnResult)
         generatedItems = resumedGenerated
         sessionItems.append(contentsOf: turnSessionItems)

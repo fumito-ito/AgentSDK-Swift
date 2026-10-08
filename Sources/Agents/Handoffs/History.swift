@@ -2,8 +2,9 @@ import Foundation
 
 // Port of src/agents/handoffs/history.py.
 //
-// Swift: the provenance tracking used for session de-duplication of nested items
-// (`_nested_history_owned_items`) is not ported; see porting/manifest.json.
+// Swift: provenance tracking (`_nested_history_owned_items`) is simplified: the run items forwarded
+// verbatim by the most recent default nesting are recorded by identity, without upstream's
+// digest-based reconciliation after custom input filters.
 
 private let defaultConversationHistoryStart = "<CONVERSATION HISTORY>"
 private let defaultConversationHistoryEnd = "</CONVERSATION HISTORY>"
@@ -44,33 +45,55 @@ public func nestHandoffHistory(
     _ handoffInputData: HandoffInputData,
     historyMapper: HandoffHistoryMapper? = nil
 ) throws -> HandoffInputData {
+    try nestHandoffHistoryWithProvenance(handoffInputData, historyMapper: historyMapper).data
+}
+
+/// A run item copied verbatim into nested input history.
+struct NestedHistoryOwnedItem: Sendable {
+    let runItem: RunItem
+    let inputIndex: Int
+}
+
+/// Nests history and returns the run items the default mapper forwarded verbatim.
+func nestHandoffHistoryWithProvenance(
+    _ handoffInputData: HandoffInputData,
+    historyMapper: HandoffHistoryMapper? = nil
+) throws -> (data: HandoffInputData, ownedItems: [NestedHistoryOwnedItem]) {
     let normalizedHistory = handoffInputData.inputHistory.inputItems
     let flattenedHistory = flattenNestedHistoryMessages(normalizedHistory).map(stripInternalInputItemMetadata)
 
-    var normalizedItems: [(item: TResponseInputItem, forward: Bool)] = []
+    var normalizedItems: [NormalizedHistoryItem] = []
     for runItem in handoffInputData.preHandoffItems where !(runItem is ToolApprovalItem) {
         let plain = try runItemToPlainInput(runItem)
-        normalizedItems.append((plain, shouldForwardPreItem(plain)))
+        normalizedItems.append(NormalizedHistoryItem(item: plain, forward: shouldForwardPreItem(plain), source: runItem))
     }
     for runItem in handoffInputData.newItems where !(runItem is ToolApprovalItem) {
         let plain = try runItemToPlainInput(runItem)
-        normalizedItems.append((plain, shouldForwardNewItem(plain)))
+        normalizedItems.append(NormalizedHistoryItem(item: plain, forward: shouldForwardNewItem(plain), source: runItem))
     }
 
     let historyItems: [TResponseInputItem]
+    var ownedItems: [NestedHistoryOwnedItem] = []
     if let historyMapper {
         historyItems = historyMapper(flattenedHistory + normalizedItems.map(\.item))
     } else {
-        historyItems = buildOrderedDefaultHistory(flattenedHistory, normalizedItems)
+        (historyItems, ownedItems) = buildOrderedDefaultHistory(flattenedHistory, normalizedItems)
     }
 
-    return handoffInputData.clone { data in
+    let nested = handoffInputData.clone { data in
         data.inputHistory = .items(historyItems)
         data.preHandoffItems = []
         // The mapped history is the exact model input. New items stay unchanged for session
         // history.
         data.inputItems = []
     }
+    return (nested, ownedItems)
+}
+
+private struct NormalizedHistoryItem {
+    let item: TResponseInputItem
+    let forward: Bool
+    let source: RunItem
 }
 
 /// Returns a single assistant message summarizing the transcript.
@@ -87,25 +110,27 @@ private func runItemToPlainInput(_ runItem: RunItem) throws -> TResponseInputIte
 
 private func buildOrderedDefaultHistory(
     _ flattenedHistory: [TResponseInputItem],
-    _ normalizedItems: [(item: TResponseInputItem, forward: Bool)]
-) -> [TResponseInputItem] {
+    _ normalizedItems: [NormalizedHistoryItem]
+) -> ([TResponseInputItem], [NestedHistoryOwnedItem]) {
     var historyItems: [TResponseInputItem] = []
+    var ownedItems: [NestedHistoryOwnedItem] = []
     var pendingSummary = flattenedHistory
-    for (plain, forward) in normalizedItems {
-        if !forward {
-            pendingSummary.append(plain)
+    for normalized in normalizedItems {
+        if !normalized.forward {
+            pendingSummary.append(normalized.item)
             continue
         }
         if !pendingSummary.isEmpty || historyItems.isEmpty {
             historyItems.append(contentsOf: defaultHandoffHistoryMapper(pendingSummary))
             pendingSummary = []
         }
-        historyItems.append(plain)
+        ownedItems.append(NestedHistoryOwnedItem(runItem: normalized.source, inputIndex: historyItems.count))
+        historyItems.append(normalized.item)
     }
     if !pendingSummary.isEmpty || historyItems.isEmpty {
         historyItems.append(contentsOf: defaultHandoffHistoryMapper(pendingSummary))
     }
-    return historyItems
+    return (historyItems, ownedItems)
 }
 
 private func buildSummaryMessage(_ transcript: [TResponseInputItem]) -> TResponseInputItem {
