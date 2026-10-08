@@ -27,8 +27,9 @@ extension AgentRunnerTests {
         return try await Runner.run(agent, state: state)
     }
 
-    private func toState(_ result: any RunResultBase) -> RunState {
-        (result as? RunResult)?.toState() ?? (result as! RunResultStreaming).toState()
+    private func toState(_ result: any RunResultBase) throws -> RunState {
+        if let result = result as? RunResult { return result.toState() }
+        return try #require(result as? RunResultStreaming).toState()
     }
 
     // MARK: - Hosted MCP approvals
@@ -48,7 +49,7 @@ extension AgentRunnerTests {
         #expect(first.interruptions.count == 1)
         #expect(first.interruptions.first?.rawItem.string("server_label") == "server-a")
 
-        let state = toState(first)
+        let state = try toState(first)
         try state.approve(first.interruptions[0], alwaysApprove: true)
         let resumed = try await resumeMaybeStreamed(agent, state: state, streamed: streamed)
 
