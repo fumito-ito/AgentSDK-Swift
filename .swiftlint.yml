@@ -11,16 +11,18 @@ excluded:
 # The SDK mirrors the module layout of openai-agents-python, whose modules are
 # large and model deeply nested wire formats. Limits are relaxed accordingly.
 line_length:
-  warning: 140
-  error: 200
+  # Upstream error messages are long string literals that are kept verbatim.
+  warning: 180
+  error: 250
   ignores_comments: true
   ignores_urls: true
 file_length:
   warning: 1500
   error: 3000
 type_body_length:
-  warning: 600
-  error: 1200
+  # Test suites mirror whole upstream test modules.
+  warning: 800
+  error: 1500
 function_body_length:
   warning: 120
   error: 250
@@ -37,7 +39,12 @@ type_name:
   max_length: 60
 large_tuple:
   warning: 4
+trailing_comma:
+  # Multi-line collection literals always end with a comma.
+  mandatory_comma: true
 disabled_rules:
   # Public initializers mirror the keyword arguments of the Python SDK
   # (for example `ModelSettings` and `RunConfig`), which have many parameters.
   - function_parameter_count
+  # Lossy UTF-8 decoding matches the upstream `errors="replace"` handling of wire payloads.
+  - optional_data_string_conversion

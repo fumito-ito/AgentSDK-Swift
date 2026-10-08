@@ -41,3 +41,20 @@ Swift-specific deviations from openai-agents-python. Each entry records what dif
 - **Decision:** Upstream builds JSON schemas from Python function signatures and docstrings. Swift has no runtime signature reflection, so function tools take a `Decodable` argument type whose schema is derived from its `Decodable` conformance (or supplied explicitly). `strict_schema.py` is ported as-is because it operates on JSON.
 - **Why:** This is the closest Swift equivalent that keeps schema and decoding in one source of truth.
 - **Apply:** Upstream tests for docstring parsing and `inspect.signature` handling are `skipped`.
+
+## D8. Current spans and traces are scoped, not set and reset
+
+- **Decision:** `Scope.currentSpan` / `Scope.currentTrace` are `@TaskLocal` values. Spans and traces become current through scoped APIs (`span.withCurrent { }`, `span.run { }`, `trace.run { }`) instead of upstream's `start(mark_as_current=True)` / `finish(reset_current=True)` pairs. Long-lived spans (the runner's task and agent spans) are started and finished explicitly, and each unit of work runs inside `withCurrent`.
+- **Why:** Swift task-locals can only be bound for the duration of a closure. Scoped binding also makes it impossible to leak a current span past its owner, which upstream guards against with tokens.
+- **Apply:** When porting code that marks a span current, wrap the code that should observe it in `withCurrent`. Child tasks inherit the binding automatically; code that crosses into unstructured tasks must capture and rebind it.
+
+## D9. Deeply recursive JSON processing runs on a large stack
+
+- **Decision:** `ensureStrictJSONSchema` converts schemas that are nested more than a few levels, or that use `$defs`/`definitions`, on a dedicated thread with a 64 MiB stack (`runOnLargeStack`). Tests that build 1,000-level fixtures also run on a large stack.
+- **Why:** Upstream relies on Python's recursion limit. Swift concurrency threads have 512 KiB stacks, and nested `JSONValue` trees are released recursively, so schemas inside upstream's limits (depth 100) overflowed the stack.
+- **Apply:** Use `runOnLargeStack` for other recursive JSON walkers that accept untrusted depth.
+
+## D10. Swift file names are unique per target
+
+- **Decision:** When two upstream modules share a basename within one Swift target, the nested one gets a prefixed name: `run_internal/items.py` → `RunInternal/RunInternalItems.swift`.
+- **Why:** Swift Package Manager rejects two sources with the same basename in one target.
