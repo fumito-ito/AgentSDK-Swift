@@ -66,11 +66,12 @@ extension AgentRunnerTests {
         let session = SimpleListSession()
         let model = try ScriptedModel()
         try model.enqueue(.output([getTextMessage("preserved_on_guardrail_cancellation")]))
-        let agent = Agent(name: "test", model: .instance(model), outputGuardrails: [OutputGuardrail { _, _, _ in
+        let guardrail = OutputGuardrail { _, _, _ in
             guardrailStarted.set()
             try await waitForever()
             fatalError("unreachable")
-        },])
+        }
+        let agent = Agent(name: "test", model: .instance(model), outputGuardrails: [guardrail])
 
         let runTask = Task { try await Runner.run(agent, input: "user_message", session: session) }
         try await guardrailStarted.wait(timeout: 5)
@@ -194,11 +195,12 @@ extension AgentRunnerTests {
             outputType: try AgentOutputSchema(FooOutput.self),
             toolUseBehavior: .stopOnFirstTool
         )
-        try model.extend([.output([
+        let firstTurn: [TResponseOutputItem] = [
             getTextMessage("a_message"),
             getFunctionToolCall("test_tool_one", callId: "tool-one"),
             getFunctionToolCall("test_tool_two", callId: "tool-two"),
-        ]),])
+        ]
+        try model.extend([.output(firstTurn)])
 
         let result = try await Runner.run(agent, input: "user_message")
 
