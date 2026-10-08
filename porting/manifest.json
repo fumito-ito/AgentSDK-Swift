@@ -3076,9 +3076,16 @@
       "notes": ""
     },
     "tests/test_agent_runner.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/AgentRunnerTests.swift",
+        "Tests/AgentsTests/AgentRunnerTests+Sessions.swift",
+        "Tests/AgentsTests/AgentRunnerTests+Conversations.swift",
+        "Tests/AgentsTests/AgentRunnerTests+Turns.swift",
+        "Tests/AgentsTests/AgentRunnerTests+Collisions.swift",
+        "Tests/AgentsTests/AgentRunnerTests+Utilities.swift"
+      ],
+      "notes": "Blocked-output, sandbox, SQLite/OpenAI conversation sessions, RunState serialization, and execute_approved_tools cases pending/skipped."
     },
     "tests/test_agent_runner_streamed.py": {
       "status": "pending",
@@ -3908,8 +3915,10 @@
       "notes": ""
     },
     "tests/utils/hitl.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/Utils/HITL.swift"
+      ],
       "notes": ""
     },
     "tests/utils/simple_session.py": {

@@ -69,6 +69,40 @@ func executeToolOutputGuardrails(
 }
 
 /// Executes function tool calls, honoring approvals, guardrails, hooks, and concurrency limits.
+/// Signals that a dispatched function tool reached its invocation point (or finished early).
+///
+/// Swift: asyncio starts tasks in creation order; Swift task-group children start in any order.
+/// The batch executor waits on this signal before dispatching the next queued tool, so tools
+/// start in FIFO order as upstream guarantees.
+final class ToolDispatchSignal: @unchecked Sendable {
+    @TaskLocal static var current: ToolDispatchSignal?
+
+    private let lock = NSLock()
+    private var signaled = false
+    private var waiter: CheckedContinuation<Void, Never>?
+
+    func signal() {
+        let continuation: CheckedContinuation<Void, Never>? = lock.locked {
+            guard !signaled else { return nil }
+            signaled = true
+            defer { waiter = nil }
+            return waiter
+        }
+        continuation?.resume()
+    }
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            let resumeNow: Bool = lock.locked {
+                if signaled { return true }
+                waiter = continuation
+                return false
+            }
+            if resumeNow { continuation.resume() }
+        }
+    }
+}
+
 struct FunctionToolBatchExecutor {
     let agent: Agent
     let toolRuns: [ToolRunFunction]
@@ -85,17 +119,24 @@ struct FunctionToolBatchExecutor {
         var results = [FunctionToolResult?](repeating: nil, count: toolRuns.count)
         try await withThrowingTaskGroup(of: (Int, FunctionToolResult).self) { group in
             var nextIndex = 0
-            func startNext() {
+            func startNext() async {
                 guard nextIndex < toolRuns.count else { return }
                 let index = nextIndex
                 let run = toolRuns[index]
                 nextIndex += 1
-                group.addTask { (index, try await runSingleTool(run)) }
+                let dispatched = ToolDispatchSignal()
+                group.addTask {
+                    defer { dispatched.signal() }
+                    return try await ToolDispatchSignal.$current.withValue(dispatched) {
+                        (index, try await runSingleTool(run))
+                    }
+                }
+                await dispatched.wait()
             }
-            for _ in 0..<min(limit, toolRuns.count) { startNext() }
+            for _ in 0..<min(limit, toolRuns.count) { await startNext() }
             while let (index, result) = try await group.next() {
                 results[index] = result
-                startNext()
+                await startNext()
             }
         }
         return (results.compactMap { $0 }, inputGuardrailResults.value, outputGuardrailResults.value)

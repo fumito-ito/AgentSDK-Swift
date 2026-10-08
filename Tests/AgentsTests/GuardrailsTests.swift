@@ -743,6 +743,9 @@ import AgentsTesting
             },
             InputGuardrail(name: secondRaises ? "raises" : "trips", runInParallel: runInParallel) { _, _, _ in
                 try await firstDone.wait()
+                // Swift: asyncio resumes this waiter only after the first guardrail finished;
+                // threads can finish both at once, so give the first result time to land.
+                try await sleep(seconds: 0.01)
                 if secondRaises { throw TestError("guardrail exploded") }
                 return GuardrailFunctionOutput(outputInfo: "second", tripwireTriggered: secondTriggers)
             },
@@ -758,6 +761,9 @@ import AgentsTesting
             },
             OutputGuardrail(name: secondRaises ? "raises" : "trips") { _, _, _ in
                 try await firstDone.wait()
+                // Swift: asyncio resumes this waiter only after the first guardrail finished;
+                // threads can finish both at once, so give the first result time to land.
+                try await sleep(seconds: 0.01)
                 if secondRaises { throw TestError("guardrail exploded") }
                 return GuardrailFunctionOutput(outputInfo: "second", tripwireTriggered: secondTriggers)
             },

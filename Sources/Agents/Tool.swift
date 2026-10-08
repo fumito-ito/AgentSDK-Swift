@@ -242,6 +242,8 @@ public final class FunctionTool: Tool, @unchecked Sendable {
     weak var agentInstance: Agent?
     var toolNamespace: String?
     var toolNamespaceDescription: String?
+    /// Whether the invoker signals FIFO dispatch itself, right before the user body runs.
+    var signalsDispatchBeforeBody = false
     var mcpTitle: String?
     var toolOrigin: ToolOrigin?
     var emitToolOrigin = true
@@ -323,6 +325,7 @@ public final class FunctionTool: Tool, @unchecked Sendable {
         copied.agentInstance = agentInstance
         copied.toolNamespace = toolNamespace
         copied.toolNamespaceDescription = toolNamespaceDescription
+        copied.signalsDispatchBeforeBody = signalsDispatchBeforeBody
         copied.mcpTitle = mcpTitle
         copied.toolOrigin = toolOrigin
         copied.emitToolOrigin = emitToolOrigin
@@ -432,6 +435,9 @@ public func invokeFunctionTool(tool: FunctionTool, context: ToolContext, argumen
 }
 
 func invokeFunctionToolWithMetadata(tool: FunctionTool, context: ToolContext, arguments: String) async throws -> FunctionToolInvocationResult {
+    if !tool.signalsDispatchBeforeBody {
+        ToolDispatchSignal.current?.signal()
+    }
     context.defaultFailureHandled = false
     func consume() -> Bool {
         defer { context.defaultFailureHandled = false }
@@ -587,6 +593,8 @@ extension FunctionTool {
                 }
                 throw ModelBehaviorError("\(baseMessage): \(error)")
             }
+            // Release the next queued tool only once this tool's body is about to run.
+            ToolDispatchSignal.current?.signal()
             let output = try await body(context, arguments)
             if AgentsDebug.dontLogToolData {
                 logger.debug("Tool \(toolName) completed.")
@@ -595,7 +603,7 @@ extension FunctionTool {
             }
             return output
         }
-        return try makeFailureHandlingTool(
+        let tool = try makeFailureHandlingTool(
             name: name,
             description: description,
             paramsJSONSchema: schema,
@@ -614,6 +622,8 @@ extension FunctionTool {
             allowedCallers: allowedCallers,
             outputJSONSchema: outputJSONSchema
         )
+        tool.signalsDispatchBeforeBody = true
+        return tool
     }
 
     /// Creates a function tool that takes no arguments.
