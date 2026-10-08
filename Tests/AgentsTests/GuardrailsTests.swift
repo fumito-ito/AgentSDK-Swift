@@ -152,7 +152,7 @@ import AgentsTesting
         try model.enqueue(.output([getTextMessage("hello")]))
 
         if streamed {
-            let result = Runner.runStreamed(agent, input: "test input")
+            let result = try Runner.runStreamed(agent, input: "test input")
             var receivedEvents = false
             for try await _ in result.streamEvents() { receivedEvents = true }
             #expect(receivedEvents)
@@ -181,7 +181,7 @@ import AgentsTesting
 
         let error = await expectErrorAsync(InputGuardrailTripwireTriggered.self) {
             if streamed {
-                try await drain(Runner.runStreamed(agent, input: "test input"))
+                try await drain(try Runner.runStreamed(agent, input: "test input"))
             } else {
                 _ = try await Runner.run(agent, input: "test input")
             }
@@ -218,7 +218,7 @@ import AgentsTesting
 
         await expectErrorAsync(InputGuardrailTripwireTriggered.self) {
             if streamed {
-                try await drain(Runner.runStreamed(agent, input: "trigger guardrail"))
+                try await drain(try Runner.runStreamed(agent, input: "trigger guardrail"))
             } else {
                 _ = try await Runner.run(agent, input: "trigger guardrail")
             }
@@ -344,7 +344,7 @@ import AgentsTesting
         })
         let agent = Agent(name: "streaming_guardrail_error_agent", model: .instance(model), inputGuardrails: [guardrail])
 
-        let result = Runner.runStreamed(agent, input: "trigger guardrail")
+        let result = try Runner.runStreamed(agent, input: "trigger guardrail")
         await expectErrorAsync(TestError.self, containing: "guardrail boom") {
             try await withTestTimeout(1) { try await drain(result) }
         }
@@ -388,7 +388,7 @@ import AgentsTesting
         )
 
         await expectErrorAsync(InputGuardrailTripwireTriggered.self) {
-            try await drain(Runner.runStreamed(agent, input: "trigger guardrail"))
+            try await drain(try Runner.runStreamed(agent, input: "trigger guardrail"))
         }
 
         #expect(modelStarted.isSet)
@@ -445,7 +445,7 @@ import AgentsTesting
         )
 
         let error = await expectErrorAsync(InputGuardrailTripwireTriggered.self) {
-            try await drain(Runner.runStreamed(agent, input: "trigger guardrail"))
+            try await drain(try Runner.runStreamed(agent, input: "trigger guardrail"))
         }
 
         let runData = try #require(error?.runData)
@@ -483,7 +483,7 @@ import AgentsTesting
 
         await expectErrorAsync(InputGuardrailTripwireTriggered.self) {
             if streamed {
-                try await drain(Runner.runStreamed(agent, input: "trigger guardrail"))
+                try await drain(try Runner.runStreamed(agent, input: "trigger guardrail"))
             } else {
                 _ = try await Runner.run(agent, input: "trigger guardrail")
             }
@@ -507,7 +507,7 @@ import AgentsTesting
         try model.enqueue(.output([getTextMessage("hello")]))
 
         if streamed {
-            let result = Runner.runStreamed(agent, input: "test input")
+            let result = try Runner.runStreamed(agent, input: "test input")
             try await drain(result)
             #expect(result.finalOutput != nil)
         } else {
@@ -564,7 +564,7 @@ import AgentsTesting
         let agent = Agent(name: "mixed_agent", instructions: "Reply with 'hello'", model: .instance(model), inputGuardrails: [blocking, parallel])
 
         if streamed {
-            let result = Runner.runStreamed(agent, input: "test input")
+            let result = try Runner.runStreamed(agent, input: "test input")
             try await drain(result)
             #expect(result.finalOutput != nil)
             #expect(result.inputGuardrailResults.count == 2)
@@ -598,7 +598,7 @@ import AgentsTesting
 
         await expectErrorAsync(InputGuardrailTripwireTriggered.self) {
             if streamed {
-                try await drain(Runner.runStreamed(agent, input: "test input"))
+                try await drain(try Runner.runStreamed(agent, input: "test input"))
             } else {
                 _ = try await Runner.run(agent, input: "test input")
             }
@@ -665,7 +665,7 @@ import AgentsTesting
 
         await expectErrorAsync(InputGuardrailTripwireTriggered.self) {
             if streamed {
-                try await withTestTimeout(5) { try await drain(Runner.runStreamed(agent, input: "test input")) }
+                try await withTestTimeout(5) { try await drain(try Runner.runStreamed(agent, input: "test input")) }
             } else {
                 _ = try await withTestTimeout(5) { try await Runner.run(agent, input: "test input") }
             }
@@ -785,7 +785,7 @@ import AgentsTesting
         try model.enqueue(.output([getTextMessage("hello")]))
         let agent = Agent(name: "guardrail_results_agent", model: .instance(model), inputGuardrails: orderedInputGuardrails(secondTriggers: true, runInParallel: runInParallel))
 
-        let result = Runner.runStreamed(agent, input: "test input")
+        let result = try Runner.runStreamed(agent, input: "test input")
         let error = await expectErrorAsync(InputGuardrailTripwireTriggered.self) { try await drain(result) }
 
         let runData = try #require(error?.runData)
@@ -834,7 +834,7 @@ import AgentsTesting
             inputGuardrails: orderedInputGuardrails(secondTriggers: false, secondRaises: true, runInParallel: runInParallel)
         )
 
-        let result = Runner.runStreamed(agent, input: "test input")
+        let result = try Runner.runStreamed(agent, input: "test input")
         await expectErrorAsync(TestError.self, containing: "guardrail exploded") { try await drain(result) }
 
         #expect(names(result.inputGuardrailResults) == ["passes"])
@@ -849,7 +849,7 @@ import AgentsTesting
         var streamedResult: RunResultStreaming?
         let error = await expectErrorAsync(OutputGuardrailTripwireTriggered.self) {
             if streamed {
-                let result = Runner.runStreamed(agent, input: "test input")
+                let result = try Runner.runStreamed(agent, input: "test input")
                 streamedResult = result
                 try await drain(result)
             } else {
@@ -898,7 +898,7 @@ import AgentsTesting
             outputGuardrails: orderedOutputGuardrails(secondTriggers: false, secondRaises: true)
         )
 
-        let result = Runner.runStreamed(agent, input: "test input")
+        let result = try Runner.runStreamed(agent, input: "test input")
         await expectErrorAsync(TestError.self, containing: "guardrail exploded") { try await drain(result) }
 
         #expect(names(result.outputGuardrailResults) == ["passes"])

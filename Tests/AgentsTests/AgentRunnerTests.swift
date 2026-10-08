@@ -597,7 +597,7 @@ import AgentsTesting
         autoPreviousResponseId: Bool = false
     ) async throws -> any RunResultBase {
         if streamed {
-            let result = Runner.runStreamed(agent, input: input, runConfig: runConfig, autoPreviousResponseId: autoPreviousResponseId)
+            let result = try Runner.runStreamed(agent, input: input, runConfig: runConfig, autoPreviousResponseId: autoPreviousResponseId)
             for try await _ in result.streamEvents() {}
             return result
         }

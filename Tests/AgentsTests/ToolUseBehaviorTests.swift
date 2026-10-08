@@ -98,7 +98,7 @@ import AgentsTesting
 
         let finalOutput: (any Sendable)?
         if streamed {
-            let result = Runner.runStreamed(agent, input: "test")
+            let result = try Runner.runStreamed(agent, input: "test")
             for try await _ in result.streamEvents() {}
             finalOutput = result.finalOutput
         } else {

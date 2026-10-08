@@ -199,10 +199,20 @@ public final class ScriptedModel: Model, @unchecked Sendable {
     }
 
     /// Returns retry advice attached to the exact scripted error that was raised.
+    ///
+    /// Swift: class errors are matched by identity, as upstream; value-type errors have no
+    /// identity and are matched by their reflected value.
     public func getRetryAdvice(_ request: ModelRetryAdviceRequest) -> ModelRetryAdvice? {
         locked {
-            retryAdviceByError.first { ($0.error as AnyObject) === (request.error as AnyObject) }?.advice
+            retryAdviceByError.first { Self.isSameError($0.error, request.error) }?.advice
         }
+    }
+
+    private static func isSameError(_ lhs: any Error, _ rhs: any Error) -> Bool {
+        if type(of: lhs) is AnyClass, type(of: rhs) is AnyClass {
+            return (lhs as AnyObject) === (rhs as AnyObject)
+        }
+        return type(of: lhs) == type(of: rhs) && String(reflecting: lhs) == String(reflecting: rhs)
     }
 
     /// Throws when configured steps remain unconsumed.
@@ -338,7 +348,7 @@ public final class ScriptedModel: Model, @unchecked Sendable {
 
     private func rememberRetryAdvice(_ step: ModelStep, _ error: any Error) {
         locked {
-            retryAdviceByError.removeAll { ($0.error as AnyObject) === (error as AnyObject) }
+            retryAdviceByError.removeAll { Self.isSameError($0.error, error) }
             if let advice = step.retryAdvice {
                 retryAdviceByError.append((error, advice))
             }

@@ -22,6 +22,7 @@ final class SharedBox<Value: Sendable>: @unchecked Sendable {
         }
     }
 
+    @discardableResult
     func mutate<Result>(_ body: (inout Value) throws -> Result) rethrows -> Result {
         lock.lock()
         defer { lock.unlock() }

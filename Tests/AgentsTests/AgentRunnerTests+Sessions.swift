@@ -376,8 +376,8 @@ extension AgentRunnerTests {
         let item: TResponseInputItem = ["id": "message-1", "type": "message", "role": "user", "content": .string(secret)]
         try await session.addItems([item])
 
-        try await AgentsDebug.withOverrides(dontLogModelData: redacted, dontLogToolData: redacted) {
-            try await captureLogs(level: .debug) { capture in
+        await AgentsDebug.withOverrides(dontLogModelData: redacted, dontLogToolData: redacted) {
+            await captureLogs(level: .debug) { capture in
                 await rewindSessionItems(session, [item])
                 let logged = capture.records.filter { $0.level == .debug }.map(\.message).joined(separator: "\n")
                 #expect(!logged.contains(secret) == redacted)

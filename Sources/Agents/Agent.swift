@@ -375,7 +375,7 @@ public final class Agent: AgentBase, @unchecked Sendable {
             let resolvedRunConfig = runConfig ?? context.runConfig ?? RunConfig()
             let result: RunResultBase
             if let onStream {
-                let streaming = Runner.runStreamed(
+                let streaming = try Runner.runStreamed(
                     self,
                     input: resolvedInput,
                     contextWrapper: nestedContext,

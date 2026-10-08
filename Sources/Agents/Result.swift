@@ -280,7 +280,10 @@ public final class RunResultStreaming: RunResultBase, RunResultReplayData, @unch
     private let events: AsyncThrowingStream<StreamEvent, any Error>
     private let continuation: AsyncThrowingStream<StreamEvent, any Error>.Continuation
     private var runTask: Task<Void, Never>?
-    private var eventsConsumed = false
+    /// Event bookkeeping used to let consumers finish a turn before the next one starts.
+    private var emittedCount = 0
+    private var acknowledgedCount = 0
+    private var activeConsumers = 0
 
     init(input: RunInput, currentAgent: Agent, contextWrapper: RunContextWrapper, maxTurns: Int?) {
         self.storage = Storage(input: input, currentAgent: currentAgent)
@@ -339,7 +342,30 @@ public final class RunResultStreaming: RunResultBase, RunResultReplayData, @unch
 
     func emit(_ event: StreamEvent) {
         guard !isComplete || cancelMode == nil else { return }
+        lock.locked { emittedCount += 1 }
         continuation.yield(event)
+    }
+
+    fileprivate func consumerStarted() {
+        lock.locked { activeConsumers += 1 }
+    }
+
+    fileprivate func consumerStopped() {
+        lock.locked { activeConsumers = max(0, activeConsumers - 1) }
+    }
+
+    fileprivate func acknowledgeEvent() {
+        lock.locked { acknowledgedCount += 1 }
+    }
+
+    /// Waits for active consumers to process the events emitted so far (upstream
+    /// `_wait_for_turn_event_consumption`).
+    func waitForTurnEventConsumption() async {
+        while true {
+            let done: Bool = lock.locked { activeConsumers == 0 || acknowledgedCount >= emittedCount }
+            if done || Task.isCancelled { return }
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
     }
 
     /// Marks the run complete and closes the event stream, rethrowing `error` to consumers.
@@ -377,8 +403,8 @@ public final class RunResultStreaming: RunResultBase, RunResultReplayData, @unch
     ///
     /// Throws `MaxTurnsExceeded` when the agent exceeds the turn limit and a tripwire error when
     /// a guardrail is tripped.
-    public func streamEvents() -> AsyncThrowingStream<StreamEvent, any Error> {
-        events
+    public func streamEvents() -> RunEventStream {
+        RunEventStream(result: self, base: events)
     }
 
     /// Creates a `RunState` from this result to resume execution.
@@ -395,6 +421,84 @@ public final class RunResultStreaming: RunResultBase, RunResultReplayData, @unch
 
     public var description: String {
         prettyPrintRunResultStreaming(self)
+    }
+}
+
+/// The event sequence of a streaming run. An event counts as processed once the consumer asks
+/// for the next one, which lets `cancel(mode: .afterTurn)` take effect before the next turn.
+public struct RunEventStream: AsyncSequence, Sendable {
+    public typealias Element = StreamEvent
+
+    fileprivate let result: RunResultStreaming
+    fileprivate let base: AsyncThrowingStream<StreamEvent, any Error>
+
+    public func makeAsyncIterator() -> Iterator {
+        Iterator(result: result, base: base.makeAsyncIterator())
+    }
+
+    public struct Iterator: AsyncIteratorProtocol {
+        private let result: RunResultStreaming
+        private var base: AsyncThrowingStream<StreamEvent, any Error>.AsyncIterator
+        private var token: ConsumerToken?
+        private var pendingAcknowledgement = false
+        private var finished = false
+
+        fileprivate init(result: RunResultStreaming, base: AsyncThrowingStream<StreamEvent, any Error>.AsyncIterator) {
+            self.result = result
+            self.base = base
+        }
+
+        public mutating func next() async throws -> StreamEvent? {
+            guard !finished else { return nil }
+            if token == nil {
+                token = ConsumerToken(result: result)
+            }
+            if pendingAcknowledgement {
+                pendingAcknowledgement = false
+                result.acknowledgeEvent()
+            }
+            do {
+                guard let event = try await base.next() else {
+                    finish()
+                    return nil
+                }
+                pendingAcknowledgement = true
+                return event
+            } catch {
+                finish()
+                throw error
+            }
+        }
+
+        private mutating func finish() {
+            finished = true
+            token?.stop()
+        }
+    }
+}
+
+/// Registers a stream consumer and unregisters it when stopped or released, so a consumer that
+/// stops iterating early never blocks the run loop.
+private final class ConsumerToken: @unchecked Sendable {
+    private let result: RunResultStreaming
+    private let lock = NSLock()
+    private var active = true
+
+    init(result: RunResultStreaming) {
+        self.result = result
+        result.consumerStarted()
+    }
+
+    func stop() {
+        let wasActive: Bool = lock.locked {
+            defer { active = false }
+            return active
+        }
+        if wasActive { result.consumerStopped() }
+    }
+
+    deinit {
+        stop()
     }
 }
 

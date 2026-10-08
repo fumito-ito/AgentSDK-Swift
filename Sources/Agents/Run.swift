@@ -96,6 +96,9 @@ public enum Runner {
 
     /// Runs a workflow in streaming mode. Consume `streamEvents()` on the returned result to
     /// receive events as they are generated; the stream throws the same errors as `run`.
+    ///
+    /// Throws immediately for invalid configurations, such as a session combined with a
+    /// server-managed conversation.
     public static func runStreamed(
         _ startingAgent: Agent,
         input: RunInput,
@@ -108,8 +111,8 @@ public enum Runner {
         autoPreviousResponseId: Bool = false,
         conversationId: String? = nil,
         session: (any Session)? = nil
-    ) -> RunResultStreaming {
-        getDefaultAgentRunner().runStreamed(
+    ) throws -> RunResultStreaming {
+        try getDefaultAgentRunner().runStreamed(
             startingAgent, input: .input(input), contextWrapper: RunContextWrapper(context: context), maxTurns: maxTurns,
             hooks: hooks, runConfig: runConfig, errorHandlers: errorHandlers, previousResponseId: previousResponseId,
             autoPreviousResponseId: autoPreviousResponseId, conversationId: conversationId, session: session
@@ -127,8 +130,8 @@ public enum Runner {
         autoPreviousResponseId: Bool = false,
         conversationId: String? = nil,
         session: (any Session)? = nil
-    ) -> RunResultStreaming {
-        getDefaultAgentRunner().runStreamed(
+    ) throws -> RunResultStreaming {
+        try getDefaultAgentRunner().runStreamed(
             startingAgent, input: .state(state), contextWrapper: nil, maxTurns: state.maxTurns,
             hooks: hooks, runConfig: runConfig, errorHandlers: errorHandlers, previousResponseId: previousResponseId,
             autoPreviousResponseId: autoPreviousResponseId, conversationId: conversationId, session: session
@@ -146,8 +149,8 @@ public enum Runner {
         previousResponseId: String?,
         conversationId: String?,
         session: (any Session)?
-    ) -> RunResultStreaming {
-        getDefaultAgentRunner().runStreamed(
+    ) throws -> RunResultStreaming {
+        try getDefaultAgentRunner().runStreamed(
             startingAgent, input: .input(input), contextWrapper: contextWrapper, maxTurns: maxTurns,
             hooks: hooks, runConfig: runConfig, errorHandlers: nil, previousResponseId: previousResponseId,
             autoPreviousResponseId: false, conversationId: conversationId, session: session
@@ -200,7 +203,7 @@ open class AgentRunner: @unchecked Sendable {
         autoPreviousResponseId: Bool,
         conversationId: String?,
         session: (any Session)?
-    ) -> RunResultStreaming {
+    ) throws -> RunResultStreaming {
         let wrapper: RunContextWrapper
         let resultInput: RunInput
         let resolvedMaxTurns: Int?
@@ -214,6 +217,14 @@ open class AgentRunner: @unchecked Sendable {
             resultInput = state.originalInput
             resolvedMaxTurns = state.maxTurns
         }
+        let resumed: RunState?
+        if case .state(let state) = input { resumed = state } else { resumed = nil }
+        try validateSessionConversationSettings(
+            session,
+            conversationId: conversationId ?? resumed?.conversationId,
+            previousResponseId: previousResponseId ?? resumed?.previousResponseId,
+            autoPreviousResponseId: autoPreviousResponseId || (resumed?.autoPreviousResponseId ?? false)
+        )
         let currentAgent: Agent
         if case .state(let state) = input { currentAgent = state.currentAgent ?? startingAgent } else { currentAgent = startingAgent }
         let streamed = RunResultStreaming(input: resultInput, currentAgent: currentAgent, contextWrapper: wrapper, maxTurns: resolvedMaxTurns)
@@ -547,8 +558,10 @@ private final class RunDriver: @unchecked Sendable {
 
     private func runLoop() async throws -> RunResult {
         while true {
-            if let streamed, streamed.cancelMode == .afterTurn, currentTurn > 0 {
-                return buildCancelledResult()
+            if let streamed, currentTurn > 0 {
+                // Let consumers process the completed turn before starting another one.
+                await streamed.waitForTurnEventConsumption()
+                if streamed.cancelMode == .afterTurn { return buildCancelledResult() }
             }
             try validateOutputGuardrailsWithServerManagedConversation()
             let resumingTurn = isResumedState

@@ -69,7 +69,7 @@ import AgentsTesting
         try model.extend(someFunctionTurns(5))
 
         await expectErrorAsync(MaxTurnsExceeded.self) {
-            let output = Runner.runStreamed(agent, input: "user_message", maxTurns: 3)
+            let output = try Runner.runStreamed(agent, input: "user_message", maxTurns: 3)
             _ = try await drain(output)
         }
     }
@@ -79,7 +79,7 @@ import AgentsTesting
         let agent = Agent(name: "test_1", tools: [getFunctionTool(name: "some_function", returnValue: "result")], model: .instance(model))
         try model.extend(someFunctionTurns(4, final: "done"))
 
-        let result = Runner.runStreamed(agent, input: "user_message", maxTurns: nil)
+        let result = try Runner.runStreamed(agent, input: "user_message", maxTurns: nil)
         _ = try await drain(result)
 
         #expect(result.finalOutput as? String == "done")
@@ -138,7 +138,7 @@ import AgentsTesting
         let model = try ScriptedModel(steps: [.output([getRefusalMessage("I cannot help with that request.")])])
         let agent = Agent(name: "test_1", model: .instance(model))
 
-        let result = Runner.runStreamed(
+        let result = try Runner.runStreamed(
             agent,
             input: "user_message",
             errorHandlers: RunErrorHandlers(modelRefusal: { _ in RunErrorHandlerResult(finalOutput: "safe fallback") })
@@ -180,7 +180,7 @@ import AgentsTesting
         try model.extend(Array(repeating: .output([getFunctionToolCall("tool_1")]), count: 5))
 
         await expectErrorAsync(MaxTurnsExceeded.self) {
-            _ = try await drain(Runner.runStreamed(agent, input: "user_message", maxTurns: 3))
+            _ = try await drain(try Runner.runStreamed(agent, input: "user_message", maxTurns: 3))
         }
     }
 
@@ -273,7 +273,7 @@ import AgentsTesting
     @Test func testStreamedMaxTurnsHandlerReturnsOutput() async throws {
         let agent = Agent(name: "test_1", model: .instance(try ScriptedModel()))
 
-        let result = Runner.runStreamed(
+        let result = try Runner.runStreamed(
             agent,
             input: "user_message",
             maxTurns: 0,
@@ -291,7 +291,7 @@ import AgentsTesting
     @Test func testStreamedMaxTurnsHandlerPydanticOutput() async throws {
         let agent = Agent(name: "test_1", model: .instance(try ScriptedModel()), outputType: try AgentOutputSchema(FooModel.self))
 
-        let result = Runner.runStreamed(
+        let result = try Runner.runStreamed(
             agent,
             input: "user_message",
             maxTurns: 0,
@@ -308,7 +308,7 @@ import AgentsTesting
     @Test func testStreamedMaxTurnsHandlerListOutput() async throws {
         let agent = Agent(name: "test_1", model: .instance(try ScriptedModel()), outputType: try AgentOutputSchema([String].self))
 
-        let result = Runner.runStreamed(
+        let result = try Runner.runStreamed(
             agent,
             input: "user_message",
             maxTurns: 0,
@@ -332,7 +332,7 @@ import AgentsTesting
         let session = SimpleListSession(sessionId: "max-turns-handler")
         let handlers = RunErrorHandlers(maxTurns: { _ in RunErrorHandlerResult(finalOutput: "fallback answer") })
         if streamed {
-            let result = Runner.runStreamed(agent, input: "user_message", maxTurns: 1, errorHandlers: handlers, session: session)
+            let result = try Runner.runStreamed(agent, input: "user_message", maxTurns: 1, errorHandlers: handlers, session: session)
             _ = try await drain(result)
             #expect(result.finalOutput as? String == "fallback answer")
         } else {
@@ -365,7 +365,7 @@ import AgentsTesting
             })
             let state: RunState
             if streamed {
-                let result = Runner.runStreamed(agent, input: "user_message", maxTurns: 1, errorHandlers: handlers, session: session)
+                let result = try Runner.runStreamed(agent, input: "user_message", maxTurns: 1, errorHandlers: handlers, session: session)
                 _ = try await drain(result)
                 state = result.toState()
             } else {
@@ -409,7 +409,7 @@ import AgentsTesting
             if !streamed {
                 return try await Runner.run(agent, input: "user_message", maxTurns: 0, errorHandlers: handlers, session: session)
             }
-            let result = Runner.runStreamed(agent, input: "user_message", maxTurns: 0, errorHandlers: handlers, session: session)
+            let result = try Runner.runStreamed(agent, input: "user_message", maxTurns: 0, errorHandlers: handlers, session: session)
             streamedResult = result
             do {
                 for try await event in result.streamEvents() { streamedEvents.append(event) }
@@ -454,7 +454,7 @@ import AgentsTesting
     @Test func testStreamedMaxTurnsHandlerValidationFailurePersistsInput() async throws {
         let agent = Agent(name: "test", model: .instance(try ScriptedModel()), outputType: try AgentOutputSchema(Foo.self))
         let session = SimpleListSession()
-        let result = Runner.runStreamed(
+        let result = try Runner.runStreamed(
             agent,
             input: "user_message",
             maxTurns: 0,
@@ -480,7 +480,7 @@ import AgentsTesting
         let handlers = RunErrorHandlers(maxTurns: { _ in RunErrorHandlerResult(finalOutput: "same answer") })
 
         if streamed {
-            _ = try await drain(Runner.runStreamed(agent, input: "user_message", maxTurns: 1, errorHandlers: handlers, session: session))
+            _ = try await drain(try Runner.runStreamed(agent, input: "user_message", maxTurns: 1, errorHandlers: handlers, session: session))
         } else {
             _ = try await Runner.run(agent, input: "user_message", maxTurns: 1, errorHandlers: handlers, session: session)
         }
