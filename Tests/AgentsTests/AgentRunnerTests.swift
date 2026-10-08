@@ -805,14 +805,11 @@ import AgentsTesting
         let session = SimpleListSession()
         let model = try ScriptedModel()
         try model.enqueue(.output([getTextMessage("should_not_be_saved")]))
-        let agent = Agent(
-            name: "test",
-            model: .instance(model),
-            inputGuardrails: [InputGuardrail { _, _, _ in
-                try await sleep(seconds: 0.01)
-                return GuardrailFunctionOutput(tripwireTriggered: true)
-            },]
-        )
+        let guardrail = InputGuardrail { _, _, _ in
+            try await sleep(seconds: 0.01)
+            return GuardrailFunctionOutput(tripwireTriggered: true)
+        }
+        let agent = Agent(name: "test", model: .instance(model), inputGuardrails: [guardrail])
 
         await expectErrorAsync(InputGuardrailTripwireTriggered.self) {
             _ = try await Runner.run(agent, input: "user_message", session: session)
