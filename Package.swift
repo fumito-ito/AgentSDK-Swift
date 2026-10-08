@@ -18,17 +18,12 @@ let package = Package(
             name: "SimpleApp",
             targets: ["SimpleApp"])
     ],
-    dependencies: [
-        .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.0.0")
-    ],
+    dependencies: [],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
-            name: "AgentSDK-Swift",
-            dependencies: [
-                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
-            ]),
+            name: "AgentSDK-Swift"),
         .executableTarget(
             name: "SimpleApp",
             dependencies: ["AgentSDK-Swift"],
