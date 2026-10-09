@@ -343,6 +343,8 @@ func getResponseWithRetry(
             return response
         } catch {
             if error is CancellationError { throw error }
+            // Parent cancellation wins over errors raised while the attempt was cleaning up.
+            if Task.isCancelled { throw CancellationError() }
             guard let delay = await nextRetryDelay(
                 error: error, state: &state, settings: retrySettings, getRetryAdvice: getRetryAdvice, stream: false,
                 replayUnsafeRequest: replayUnsafeRequest, emittedRetryUnsafeEvent: false,
@@ -408,8 +410,13 @@ func streamResponseWithRetry(
                         continuation.yield(event)
                     }
                 } catch {
-                    if error is CancellationError || Task.isCancelled {
+                    if error is CancellationError {
                         continuation.finish(throwing: error)
+                        return
+                    }
+                    // Parent cancellation wins over errors raised while the stream was cleaning up.
+                    if Task.isCancelled {
+                        continuation.finish(throwing: CancellationError())
                         return
                     }
                     guard let delay = await nextRetryDelay(
