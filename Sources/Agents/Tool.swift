@@ -209,7 +209,9 @@ public final class FunctionTool: Tool, @unchecked Sendable {
     ///
     /// Return a `String`, a structured tool output (`ToolOutputText`, `ToolOutputImage`,
     /// `ToolOutputFileContent`), an array of them, or any value with a string description.
-    public var onInvokeTool: @Sendable (ToolContext, String) async throws -> any Sendable
+    public var onInvokeTool: @Sendable (ToolContext, String) async throws -> any Sendable {
+        didSet { failureHandlingInvoker = nil }
+    }
     /// Whether the JSON schema is in strict mode.
     public var strictJSONSchema: Bool
     /// Whether the tool is enabled.
@@ -248,8 +250,9 @@ public final class FunctionTool: Tool, @unchecked Sendable {
     var toolOrigin: ToolOrigin?
     var emitToolOrigin = true
     var mcpToolBinding: (serverName: String, toolName: String, serverIndex: Int?)?
-    /// Whether `onInvokeTool` already applies the failure formatter.
-    var handlesFailures = false
+    /// The SDK failure-handling invoker behind `onInvokeTool`, rebound to each copy so copies
+    /// resolve failure policy against themselves. Cleared when `onInvokeTool` is replaced.
+    var failureHandlingInvoker: FailureHandlingInvoker?
 
     public init(
         name: String,
@@ -330,7 +333,10 @@ public final class FunctionTool: Tool, @unchecked Sendable {
         copied.toolOrigin = toolOrigin
         copied.emitToolOrigin = emitToolOrigin
         copied.mcpToolBinding = mcpToolBinding
-        copied.handlesFailures = handlesFailures
+        if let failureHandlingInvoker {
+            copied.onInvokeTool = failureHandlingInvoker.bound(to: copied)
+            copied.failureHandlingInvoker = failureHandlingInvoker
+        }
         return copied
     }
 
@@ -416,11 +422,25 @@ func maybeInvokeFunctionToolFailureErrorFunction(
     error: any Error
 ) async throws -> String? {
     guard let function = resolveFunctionToolFailureErrorFunction(tool, context: context) else { return nil }
-    let result = try await function(context, error)
+    let result = try await function(context, coerceToolErrorForFailureErrorFunction(error))
     if tool.useDefaultFailureErrorFunction, let toolContext = context as? ToolContext {
         toolContext.defaultFailureHandled = true
     }
     return result
+}
+
+/// Adapts a cancellation into a described error for tool failure formatters.
+struct FunctionToolCancelledError: Error, CustomStringConvertible {
+    let cancelledError: CancellationError
+    var description: String { "Tool execution cancelled." }
+}
+
+/// Converts runtime failures into the error contract expected by tool failure formatters.
+func coerceToolErrorForFailureErrorFunction(_ error: any Error) -> any Error {
+    if let cancelled = error as? CancellationError {
+        return FunctionToolCancelledError(cancelledError: cancelled)
+    }
+    return error
 }
 
 /// A function tool result with metadata for SDK-generated error outputs.
@@ -679,30 +699,12 @@ extension FunctionTool {
         mcpTitle: String? = nil,
         onHandledError: (@Sendable (FunctionTool, any Error, String, ToolContext) -> Void)? = nil
     ) throws -> FunctionTool {
-        let box = WeakToolBox()
+        let invoker = FailureHandlingInvoker(invoke: invoke, onHandledError: onHandledError)
         let tool = try FunctionTool(
             name: name,
             description: description,
             paramsJSONSchema: paramsJSONSchema,
-            onInvokeTool: { context, input in
-                do {
-                    return try await invoke(context, input)
-                } catch {
-                    guard let tool = box.tool else { throw error }
-                    if error is CancellationError, Task.isCancelled { throw error }
-                    guard let result = try await maybeInvokeFunctionToolFailureErrorFunction(
-                        tool: tool, context: context, error: error
-                    ) else {
-                        throw error
-                    }
-                    if let onHandledError {
-                        onHandledError(tool, error, input, context)
-                    } else {
-                        reportHandledFunctionToolError(tool: tool, error: error, inputJSON: input, context: context)
-                    }
-                    return result
-                }
-            },
+            onInvokeTool: invoke,
             strictJSONSchema: strictJSONSchema,
             isEnabled: isEnabled,
             toolInputGuardrails: toolInputGuardrails,
@@ -716,8 +718,8 @@ extension FunctionTool {
             allowedCallers: allowedCallers,
             outputJSONSchema: outputJSONSchema
         )
-        box.tool = tool
-        tool.handlesFailures = true
+        tool.onInvokeTool = invoker.bound(to: tool)
+        tool.failureHandlingInvoker = invoker
         tool.toolOrigin = toolOrigin
         tool.mcpTitle = mcpTitle
         tool.setFailureErrorFunction(failureErrorFunction)
@@ -725,9 +727,43 @@ extension FunctionTool {
     }
 }
 
-/// Holds the owning tool so its invoker resolves failure policy against itself.
+/// Wraps a tool invoker with failure handling, like upstream `_FailureHandlingFunctionToolInvoker`.
+struct FailureHandlingInvoker: Sendable {
+    let invoke: @Sendable (ToolContext, String) async throws -> any Sendable
+    let onHandledError: (@Sendable (FunctionTool, any Error, String, ToolContext) -> Void)?
+
+    /// Returns an invoker that resolves failure policy against `tool`.
+    func bound(to tool: FunctionTool) -> @Sendable (ToolContext, String) async throws -> any Sendable {
+        let box = WeakToolBox(tool)
+        return { [invoke, onHandledError] context, input in
+            do {
+                return try await invoke(context, input)
+            } catch {
+                guard let tool = box.tool else { throw error }
+                if error is CancellationError, Task.isCancelled { throw error }
+                guard let result = try await maybeInvokeFunctionToolFailureErrorFunction(
+                    tool: tool, context: context, error: error
+                ) else {
+                    throw error
+                }
+                if let onHandledError {
+                    onHandledError(tool, error, input, context)
+                } else {
+                    reportHandledFunctionToolError(tool: tool, error: error, inputJSON: input, context: context)
+                }
+                return result
+            }
+        }
+    }
+}
+
+/// Holds the owning tool weakly so its invoker does not retain it.
 private final class WeakToolBox: @unchecked Sendable {
     weak var tool: FunctionTool?
+
+    init(_ tool: FunctionTool) {
+        self.tool = tool
+    }
 }
 
 /// Arguments type for tools that take no parameters.

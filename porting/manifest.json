@@ -3297,9 +3297,11 @@
       "notes": ""
     },
     "tests/test_function_tool.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/FunctionToolTests.swift"
+      ],
+      "notes": "Skipped: to_thread/event-loop, pydantic Field/kwargs, monkeypatch/deepcopy/dataclasses.replace private fields, FunctionTool subclasses (final class), runtime type checks for timeout config. JSON Schema validator assertions replaced by schema-shape assertions."
     },
     "tests/test_function_tool_approval_arguments.py": {
       "status": "pending",
