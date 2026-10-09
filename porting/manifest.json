@@ -90,9 +90,11 @@
       "notes": ""
     },
     "src/agents/apply_diff.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/ApplyDiff.swift"
+      ],
+      "notes": "Line handling on Unicode scalars to match Python code-point semantics."
     },
     "src/agents/computer.py": {
       "status": "ported",
@@ -3143,13 +3145,17 @@
       "notes": ""
     },
     "tests/test_apply_diff.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ApplyDiffTests.swift"
+      ],
       "notes": ""
     },
     "tests/test_apply_diff_helpers.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ApplyDiffHelpersTests.swift"
+      ],
       "notes": ""
     },
     "tests/test_apply_patch_tool.py": {
