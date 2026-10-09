@@ -3051,9 +3051,11 @@
       "notes": "Runtime type-validation tests skipped (compiler-enforced)."
     },
     "tests/test_agent_hooks.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/AgentHooksTests.swift"
+      ],
+      "notes": "Falsy-hooks test adapted (no truthiness); streamed/non-streamed variants parameterized."
     },
     "tests/test_agent_instructions_signature.py": {
       "status": "pending",
@@ -3061,9 +3063,12 @@
       "notes": ""
     },
     "tests/test_agent_llm_hooks.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/AgentLLMHooksTests.swift",
+        "Tests/AgentsTests/Support/HookRecorders.swift"
+      ],
+      "notes": "run_sync variant skipped (no Runner.run_sync)."
     },
     "tests/test_agent_memory_leak.py": {
       "status": "pending",
@@ -3314,9 +3319,11 @@
       "notes": ""
     },
     "tests/test_global_hooks.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/GlobalHooksTests.swift"
+      ],
+      "notes": "Four scenarios parameterized over streamed/structured."
     },
     "tests/test_guardrails.py": {
       "status": "partial",
@@ -3563,9 +3570,11 @@
       "notes": "Python examples runner script."
     },
     "tests/test_run_hooks.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/RunHooksTests.swift"
+      ],
+      "notes": "run_sync and non-RunHooks rejection tests skipped (hooks parameter is typed)."
     },
     "tests/test_run_impl_resume_paths.py": {
       "status": "pending",
