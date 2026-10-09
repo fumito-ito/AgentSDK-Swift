@@ -2480,9 +2480,12 @@
       "notes": ""
     },
     "tests/models/test_openai_responses.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/Models/OpenAIResponsesTests.swift",
+        "Tests/AgentsTests/Models/OpenAIResponsesTests+PromptAndUsage.swift"
+      ],
+      "notes": "HTTP-path tests ported via HTTPStub. Pending: websocket transport tests. Skipped: openai-python stream context-manager/aclose mechanics, dataclass mutability, dict ModelSettings."
     },
     "tests/models/test_openai_responses_converter.py": {
       "status": "ported",

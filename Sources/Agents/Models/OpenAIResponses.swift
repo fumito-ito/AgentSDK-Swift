@@ -102,7 +102,13 @@ public final class OpenAIResponsesModel: Model, @unchecked Sendable {
                         case "response.completed":
                             if var response = event["response"]?.objectValue {
                                 let responseObject = ResponseObject(json: response)
-                                let usage = responseObject?.usage.map(responseUsageToUsageWithMetadata) ?? Usage()
+                                // Mark the adapter-owned request before converting usage, like upstream
+                                // `_mark_transport_request_without_usage`.
+                                if responseObject?.usage == nil {
+                                    response[requestWithoutUsageKey] = true
+                                }
+                                let usage = responseObject?.usage.map(responseUsageToUsageWithMetadata)
+                                    ?? Usage(requests: requestsForResponseWithoutUsage(response))
                                 if let data = span.data(as: ResponseSpanData.self) {
                                     if responseObject?.usage != nil || usage.requests > 0 {
                                         data.usage = modelUsageToSpanUsage(usage)
@@ -113,9 +119,6 @@ public final class OpenAIResponsesModel: Model, @unchecked Sendable {
                                     } else if !request.tracing.isDisabled(), client.isOfficialOpenAIEndpoint {
                                         data.responseIdOverride = responseObject?.id
                                     }
-                                }
-                                if responseObject?.usage == nil {
-                                    response[requestWithoutUsageKey] = true
                                 }
                                 if request.modelSettings.preserveRawUsage == true {
                                     attachRawUsageSnapshot(&response, responseObject?.usage)
