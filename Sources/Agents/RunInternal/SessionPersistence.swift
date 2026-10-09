@@ -192,7 +192,7 @@ func saveResumedTurnItems(
 ) async throws -> Int {
     guard session != nil, !items.isEmpty else { return persistedCount }
     let saved = try await saveResultToSession(
-        session, originalInput: .items([]), newItems: Array(items.dropFirst(min(persistedCount, items.count))),
+        session, originalInput: .items([]), newItems: items,
         runState: nil, responseId: responseId, reasoningItemIdPolicy: reasoningItemIdPolicy, store: store
     )
     return persistedCount + saved

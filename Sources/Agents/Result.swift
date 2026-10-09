@@ -279,7 +279,7 @@ public final class RunResultStreaming: RunResultBase, RunResultReplayData, @unch
 
     private let events: AsyncThrowingStream<StreamEvent, any Error>
     private let continuation: AsyncThrowingStream<StreamEvent, any Error>.Continuation
-    private var runTask: Task<Void, Never>?
+    private var runTask: Task<Void, any Error>?
     /// Event bookkeeping used to let consumers finish a turn before the next one starts.
     private var emittedCount = 0
     private var acknowledgedCount = 0
@@ -334,7 +334,13 @@ public final class RunResultStreaming: RunResultBase, RunResultReplayData, @unch
     /// The error raised by the run loop, if any.
     public var runLoopException: (any Error)? { read(\.storedError) }
 
-    func attach(task: Task<Void, Never>) {
+    /// The background task running the agent loop. Awaiting it rethrows the run's error, even
+    /// when `streamEvents()` is never consumed.
+    public var runLoopTask: Task<Void, any Error>? {
+        lock.locked { runTask }
+    }
+
+    func attach(task: Task<Void, any Error>) {
         lock.lock()
         runTask = task
         lock.unlock()

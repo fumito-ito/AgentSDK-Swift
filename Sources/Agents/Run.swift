@@ -228,7 +228,7 @@ open class AgentRunner: @unchecked Sendable {
         let currentAgent: Agent
         if case .state(let state) = input { currentAgent = state.currentAgent ?? startingAgent } else { currentAgent = startingAgent }
         let streamed = RunResultStreaming(input: resultInput, currentAgent: currentAgent, contextWrapper: wrapper, maxTurns: resolvedMaxTurns)
-        let task = Task {
+        let task = Task<Void, any Error> {
             do {
                 let driver = try RunDriver(
                     startingAgent: startingAgent, input: input, contextWrapper: wrapper, maxTurns: resolvedMaxTurns,
@@ -240,6 +240,7 @@ open class AgentRunner: @unchecked Sendable {
                 streamed.finish()
             } catch {
                 streamed.finish(error: error)
+                throw error
             }
         }
         streamed.attach(task: task)
