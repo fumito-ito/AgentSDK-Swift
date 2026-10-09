@@ -3173,14 +3173,18 @@
       "notes": "Python asyncio helper internals."
     },
     "tests/test_call_model_input_filter.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/CallModelInputFilterTests.swift"
+      ],
+      "notes": "Invalid return type test skipped (typed filter); streamed variants parameterized."
     },
     "tests/test_call_model_input_filter_unit.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/CallModelInputFilterUnitTests.swift"
+      ],
+      "notes": "Invalid return type test skipped (typed filter)."
     },
     "tests/test_cancel_streaming.py": {
       "status": "pending",
@@ -3223,8 +3227,10 @@
       "notes": ""
     },
     "tests/test_custom_tool.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/CustomToolTests.swift"
+      ],
       "notes": ""
     },
     "tests/test_dapr_session_example.py": {
@@ -3245,9 +3251,9 @@
       "notes": "Environment passed explicitly instead of patching os.environ."
     },
     "tests/test_decorators.py": {
-      "status": "pending",
+      "status": "skipped",
       "swift": [],
-      "notes": ""
+      "notes": "Python module/decorator identities; Swift has factory functions instead of decorators."
     },
     "tests/test_default_tool_error_redaction.py": {
       "status": "pending",
