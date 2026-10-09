@@ -91,16 +91,18 @@ func normalizeRetryError(_ error: any Error, _ providerAdvice: ModelRetryAdvice?
         normalized.retryAfter = retryAfter
     }
     if let override = providerAdvice.normalized {
-        // Swift: upstream tracks explicitly-set fields; non-nil optionals and `true` flags stand in.
-        if let value = override.statusCode { normalized.statusCode = value }
-        if let value = override.errorCode { normalized.errorCode = value }
-        if let value = override.message { normalized.message = value }
-        if let value = override.requestId { normalized.requestId = value }
-        if let value = override.retryAfter { normalized.retryAfter = value }
-        if override.isNetworkError { normalized.isNetworkError = true }
-        if override.isTimeout { normalized.isTimeout = true }
-        // Provider normalization may add abort evidence but cannot clear an inferred abort.
-        normalized.isAbort = normalized.isAbort || override.isAbort
+        let explicit = override.explicitFields
+        if explicit.contains("status_code") { normalized.statusCode = override.statusCode }
+        if explicit.contains("error_code") { normalized.errorCode = override.errorCode }
+        if explicit.contains("message") { normalized.message = override.message }
+        if explicit.contains("request_id") { normalized.requestId = override.requestId }
+        if explicit.contains("retry_after") { normalized.retryAfter = override.retryAfter }
+        if explicit.contains("is_network_error") { normalized.isNetworkError = override.isNetworkError }
+        if explicit.contains("is_timeout") { normalized.isTimeout = override.isTimeout }
+        if explicit.contains("is_abort") {
+            // Provider normalization may add abort evidence but cannot clear an inferred abort.
+            normalized.isAbort = normalized.isAbort || override.isAbort
+        }
     }
     return normalized
 }
@@ -115,7 +117,17 @@ func defaultRetryDelay(_ attempt: Int, _ backoff: ModelRetryBackoffSettings?) ->
     return min(max(base * (0.875 + Double.random(in: 0..<1) * 0.25), 0), maxDelay)
 }
 
+/// Task-scoped replacement for the retry backoff sleep, used by tests in place of patching
+/// `asyncio.sleep`.
+enum RetrySleep {
+    @TaskLocal static var override: (@Sendable (Double) async throws -> Void)?
+}
+
 private func sleepForRetry(_ delay: Double) async throws {
+    if let override = RetrySleep.override {
+        try await override(delay)
+        return
+    }
     guard delay > 0 else { return }
     try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
 }

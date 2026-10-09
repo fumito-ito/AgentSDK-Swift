@@ -191,6 +191,7 @@ func getNewResponse(
     toolUseTracker.recordModel(model)
     var modelSettings = getModelSettings(agent, runConfig)
     modelSettings = maybeResetToolChoice(agent, toolUseTracker, modelSettings)
+    try modelSettings.validate()
 
     serverConversationTracker?.markInputAsSent(filtered.input)
     try await runLLMStartHooks(agent: agent, hooks: hooks, contextWrapper: contextWrapper, instructions: filtered.instructions, input: filtered.input)
@@ -275,6 +276,7 @@ func runSingleTurnStreamed( // swiftlint:disable:this function_body_length
     toolUseTracker.recordModel(model)
     var modelSettings = getModelSettings(agent, runConfig)
     modelSettings = maybeResetToolChoice(agent, toolUseTracker, modelSettings)
+    try modelSettings.validate()
 
     let modelInputItems = streamedResult.modelInputItems
     let input: [TResponseInputItem]

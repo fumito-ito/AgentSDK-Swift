@@ -65,3 +65,10 @@ Swift-specific deviations from openai-agents-python. Each entry records what dif
 - **Decision:** After a `sessionInputCallback` combines history and new input, the runner decides which returned items are new (and must be persisted) by content: each returned item first consumes a matching history occurrence, then a matching new-input occurrence; anything else is new.
 - **Why:** Upstream matches by object identity first, including items the callback mutated in place inside the history list it received. Swift session items are values, so identity and in-place mutation are not observable.
 - **Apply:** Upstream tests that depend on identity (repeated equal history objects, history items moved into the new-input list, in-place history replacement) are skipped.
+
+## D12. Settings validation happens when the runner consumes settings
+
+- **Decision:** `ModelSettings` and `ModelRetryBackoffSettings` keep non-throwing initializers. Values upstream's pydantic validators reject at construction (non-positive or non-finite `timeout`, negative backoff values) are rejected by `ModelSettings.validate()`, which the runner calls on the resolved settings before each model request. Settings decoded from JSON are validated while decoding.
+- **Why:** Throwing initializers would force `try` on every settings literal, including the many call sites that pass only valid constants. Validating the resolved settings still fails the run before any model call, and it also guards the timeout arithmetic against infinite or NaN values.
+- **Apply:** Ported validation tests construct the settings, then assert that `validate()` (or a run using them) throws `ValueError` with the upstream message.
+

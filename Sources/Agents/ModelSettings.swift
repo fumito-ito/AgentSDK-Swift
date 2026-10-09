@@ -425,3 +425,28 @@ public struct ModelSettings: Sendable, Equatable {
         }
     }
 }
+
+extension ModelSettings {
+    /// Rejects values upstream's pydantic validators reject at construction.
+    ///
+    /// Swift: the initializers stay non-throwing, so the runner validates the resolved settings
+    /// before each model call (porting/decisions.md D12).
+    func validate() throws {
+        if let timeout, !(timeout > 0 && timeout.isFinite) {
+            throw ValueError("timeout must be a finite number greater than 0")
+        }
+        try retry?.backoff?.validate()
+    }
+}
+
+extension ModelRetryBackoffSettings {
+    /// Rejects negative delays and multipliers.
+    func validate() throws {
+        let values: [(String, Double?)] = [("initial_delay", initialDelay), ("max_delay", maxDelay), ("multiplier", multiplier)]
+        for (name, value) in values {
+            if let value, !(value >= 0) {
+                throw ValueError("\(name): Input should be greater than or equal to 0")
+            }
+        }
+    }
+}

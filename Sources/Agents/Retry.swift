@@ -40,6 +40,10 @@ public struct ModelRetryBackoffSettings: Sendable, Equatable, Hashable {
 }
 
 /// Normalized error facts exposed to retry policies.
+///
+/// Swift: upstream records which fields the caller passed so provider overrides only replace
+/// explicit values. Optional fields take a double optional here: omit a field to leave it unset,
+/// or pass `.some(nil)` to set it to `nil` explicitly. Flags are explicit when non-`nil`.
 public struct ModelRetryNormalizedError: Sendable, Equatable {
     public var statusCode: Int?
     public var errorCode: String?
@@ -49,25 +53,45 @@ public struct ModelRetryNormalizedError: Sendable, Equatable {
     public var isAbort: Bool
     public var isNetworkError: Bool
     public var isTimeout: Bool
+    /// Names of the fields passed to the initializer (upstream `_explicit_fields`).
+    let explicitFields: Set<String>
 
     public init(
-        statusCode: Int? = nil,
-        errorCode: String? = nil,
-        message: String? = nil,
-        requestId: String? = nil,
-        retryAfter: Double? = nil,
-        isAbort: Bool = false,
-        isNetworkError: Bool = false,
-        isTimeout: Bool = false
+        statusCode: Int?? = .none,
+        errorCode: String?? = .none,
+        message: String?? = .none,
+        requestId: String?? = .none,
+        retryAfter: Double?? = .none,
+        isAbort: Bool? = nil,
+        isNetworkError: Bool? = nil,
+        isTimeout: Bool? = nil
     ) {
-        self.statusCode = statusCode
-        self.errorCode = errorCode
-        self.message = message
-        self.requestId = requestId
-        self.retryAfter = retryAfter
-        self.isAbort = isAbort
-        self.isNetworkError = isNetworkError
-        self.isTimeout = isTimeout
+        var explicit: Set<String> = []
+        func assign<T>(_ name: String, _ value: T??) -> T? {
+            guard case .some(let inner) = value else { return nil }
+            explicit.insert(name)
+            return inner
+        }
+        func assign(_ name: String, _ value: Bool?) -> Bool {
+            guard let value else { return false }
+            explicit.insert(name)
+            return value
+        }
+        self.statusCode = assign("status_code", statusCode)
+        self.errorCode = assign("error_code", errorCode)
+        self.message = assign("message", message)
+        self.requestId = assign("request_id", requestId)
+        self.retryAfter = assign("retry_after", retryAfter)
+        self.isAbort = assign("is_abort", isAbort)
+        self.isNetworkError = assign("is_network_error", isNetworkError)
+        self.isTimeout = assign("is_timeout", isTimeout)
+        self.explicitFields = explicit
+    }
+
+    public static func == (lhs: ModelRetryNormalizedError, rhs: ModelRetryNormalizedError) -> Bool {
+        lhs.statusCode == rhs.statusCode && lhs.errorCode == rhs.errorCode && lhs.message == rhs.message
+            && lhs.requestId == rhs.requestId && lhs.retryAfter == rhs.retryAfter && lhs.isAbort == rhs.isAbort
+            && lhs.isNetworkError == rhs.isNetworkError && lhs.isTimeout == rhs.isTimeout
     }
 }
 

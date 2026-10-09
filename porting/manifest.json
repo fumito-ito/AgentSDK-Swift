@@ -2462,9 +2462,13 @@
       "notes": ""
     },
     "tests/models/test_model_retry.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Models/ModelRetryTests.swift",
+        "Tests/AgentsTests/Models/ModelRetryTests+Streaming.swift",
+        "Tests/AgentsTests/Models/ModelRetryTests+ReplaySafety.swift"
+      ],
+      "notes": "Skipped: traceback/frame-local hygiene, second-cancellation cleanup timing, contextvars scoping, provider-iterator aclose bookkeeping, falsey policy attributes, websocket transport. Provider-advice mutation tests adapted (value types)."
     },
     "tests/models/test_openai_chatcompletions.py": {
       "status": "pending",
