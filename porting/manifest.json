@@ -3386,9 +3386,11 @@
       "notes": ""
     },
     "tests/test_items_helpers.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ItemsHelpersTests.swift"
+      ],
+      "notes": "Agent release/weakref, pydantic validation, and deep-copy mutation tests skipped (strong refs, value-type JSON)."
     },
     "tests/test_live_example.py": {
       "status": "skipped",
