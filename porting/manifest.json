@@ -3075,8 +3075,10 @@
       "notes": "run_sync variant skipped (no Runner.run_sync)."
     },
     "tests/test_agent_memory_leak.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/AgentMemoryLeakTests.swift"
+      ],
       "notes": ""
     },
     "tests/test_agent_prompt.py": {
@@ -3253,14 +3255,18 @@
       "notes": ""
     },
     "tests/test_disabled_trace_provider_flush.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/DisabledTraceProviderTests.swift"
+      ],
+      "notes": "Merged into one suite; flush calls provider.forceFlush() instead of monkeypatching the global provider."
     },
     "tests/test_disabled_trace_provider_shutdown.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/DisabledTraceProviderTests.swift"
+      ],
+      "notes": "Merged into one suite; flush calls provider.forceFlush() instead of monkeypatching the global provider."
     },
     "tests/test_doc_parsing.py": {
       "status": "pending",
@@ -3303,9 +3309,9 @@
       "notes": ""
     },
     "tests/test_function_schema_logger_restore.py": {
-      "status": "pending",
+      "status": "skipped",
       "swift": [],
-      "notes": ""
+      "notes": "griffe logger suppression; Swift has no docstring parser (D6)."
     },
     "tests/test_function_tool.py": {
       "status": "ported",
@@ -3368,8 +3374,11 @@
       "notes": ""
     },
     "tests/test_hitl_utils.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/HITLUtilsTests.swift",
+        "Tests/AgentsTests/Utils/HITL.swift"
+      ],
       "notes": ""
     },
     "tests/test_hosted_mcp_connectors_example.py": {
@@ -3383,9 +3392,9 @@
       "notes": "Exercises Python example applications."
     },
     "tests/test_image_generation_tool_reference.py": {
-      "status": "pending",
+      "status": "skipped",
       "swift": [],
-      "notes": ""
+      "notes": "griffe docs introspection of Python source."
     },
     "tests/test_image_generation_tool_typing.py": {
       "status": "pending",
@@ -3437,13 +3446,15 @@
       "notes": ""
     },
     "tests/test_model_error_logging_redaction.py": {
-      "status": "pending",
+      "status": "skipped",
       "swift": [],
-      "notes": ""
+      "notes": "Swift Span.setError cannot throw, so the failing-annotation path does not exist."
     },
     "tests/test_oaiconv_resume_response_id.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/OAIConversationResumeResponseIdTests.swift"
+      ],
       "notes": ""
     },
     "tests/test_openai_provider_client_options.py": {
@@ -3730,9 +3741,9 @@
       "notes": ""
     },
     "tests/test_streaming_logging.py": {
-      "status": "pending",
+      "status": "skipped",
       "swift": [],
-      "notes": ""
+      "notes": "Python logging extras (generated_items_details); Swift resume does not log generated items."
     },
     "tests/test_streaming_tool_call_arguments.py": {
       "status": "pending",
@@ -3857,9 +3868,9 @@
       "notes": ""
     },
     "tests/test_tracing_provider_safe_debug.py": {
-      "status": "pending",
+      "status": "skipped",
       "swift": [],
-      "notes": ""
+      "notes": "Python logging handler stream state."
     },
     "tests/test_transforms.py": {
       "status": "ported",
