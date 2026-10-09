@@ -2485,9 +2485,11 @@
       "notes": ""
     },
     "tests/models/test_openai_responses_converter.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Models/OpenAIResponsesConverterTests.swift"
+      ],
+      "notes": "Type-impossible cases skipped (non-int max_num_results, pydantic filter models, positional WebSearchTool args, __all__ export)."
     },
     "tests/models/test_openai_retry_helpers.py": {
       "status": "pending",
