@@ -149,7 +149,7 @@ struct FunctionToolBatchExecutor {
         let traceName = getToolCallTraceName(toolCall.json) ?? getFunctionToolTraceName(tool) ?? tool.name
         let span = functionSpan(name: traceName)
         return try await span.run {
-            let toolContext = ToolContext.fromAgentContext(
+            let toolContext = try ToolContext.fromAgentContext(
                 contextWrapper,
                 toolCallId: toolCall.callId,
                 toolCall: rawToolCall.json,

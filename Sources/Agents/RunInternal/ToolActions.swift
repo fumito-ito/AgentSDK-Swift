@@ -634,7 +634,7 @@ enum CustomToolAction {
         guard let input = call.toolCall.json.string("input") else {
             throw ModelBehaviorError("Custom tool call is missing input.")
         }
-        let toolContext = ToolContext.fromAgentContext(
+        let toolContext = try ToolContext.fromAgentContext(
             contextWrapper, toolCallId: callId, agent: agent, toolName: tool.name, toolArguments: input, runConfig: config
         )
         let currentItem = ToolApprovalItem(agent: agent, rawItem: call.toolCall.json, toolName: tool.name)

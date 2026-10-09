@@ -3555,9 +3555,11 @@
       "notes": ""
     },
     "tests/test_run_context_wrapper.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/RunContextWrapperTests.swift"
+      ],
+      "notes": "_to_str_or_none skipped (Swift string conversion cannot raise)."
     },
     "tests/test_run_error_details.py": {
       "status": "pending",
@@ -3751,9 +3753,11 @@
       "notes": ""
     },
     "tests/test_tool_context.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ToolContextTests.swift"
+      ],
+      "notes": "Hashability, missing-init-field, dict run_config, and annotation-driven plain-context tests skipped."
     },
     "tests/test_tool_converter.py": {
       "status": "pending",
@@ -3766,9 +3770,11 @@
       "notes": ""
     },
     "tests/test_tool_guardrails.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ToolGuardrailsTests.swift"
+      ],
+      "notes": "Sync/async variants merged (Swift guardrails are async); invalid-function and default-name decorator checks skipped."
     },
     "tests/test_tool_identity.py": {
       "status": "pending",

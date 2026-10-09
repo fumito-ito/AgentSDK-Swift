@@ -358,7 +358,7 @@ public final class Agent: AgentBase, @unchecked Sendable {
                 schemaInfo: shouldCaptureToolInput ? schemaInfo : nil,
                 inputBuilder: inputBuilder
             )
-            let nestedContext = ToolContext.fromAgentContext(
+            let nestedContext = try ToolContext.fromAgentContext(
                 context,
                 toolCallId: context.toolCallId,
                 toolCall: context.toolCall,

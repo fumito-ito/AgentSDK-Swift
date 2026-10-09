@@ -83,6 +83,8 @@ public final class ToolContext: RunContextWrapper, @unchecked Sendable {
     }
 
     /// Creates a `ToolContext` that shares usage and approvals with `context`.
+    ///
+    /// Throws `ValueError` when neither `toolName`/`toolArguments` nor `toolCall` supplies them.
     public static func fromAgentContext(
         _ context: RunContextWrapper,
         toolCallId: String,
@@ -92,9 +94,13 @@ public final class ToolContext: RunContextWrapper, @unchecked Sendable {
         toolArguments: String? = nil,
         toolNamespace: String? = nil,
         runConfig: RunConfig? = nil
-    ) -> ToolContext {
-        let resolvedName = toolName ?? toolCall?.string("name") ?? ""
-        let resolvedArguments = toolArguments ?? toolCall?.string("arguments") ?? ""
+    ) throws -> ToolContext {
+        guard let resolvedName = toolName ?? toolCall.map({ $0.string("name") ?? "" }) else {
+            throw ValueError("tool_name must be passed to ToolContext")
+        }
+        guard let resolvedArguments = toolArguments ?? toolCall.map({ $0.string("arguments") ?? "" }) else {
+            throw ValueError("tool_arguments must be passed to ToolContext")
+        }
         let parentToolContext = context as? ToolContext
         return ToolContext(
             sharingStateWith: context,
