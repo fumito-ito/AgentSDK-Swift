@@ -3091,9 +3091,10 @@
       "status": "partial",
       "swift": [
         "Tests/AgentsTests/AgentRunnerStreamedTests.swift",
-        "Tests/AgentsTests/AgentRunnerStreamedTests+Guardrails.swift"
+        "Tests/AgentsTests/AgentRunnerStreamedTests+Guardrails.swift",
+        "Tests/AgentsTests/AgentRunnerStreamedTests+Resume.swift"
       ],
-      "notes": "Parts 1-2 ported; blocked-output, ws, serialized-state, and terminal-behavior deferral cases pending."
+      "notes": "Blocked-output, ws, serialized-state, and terminal-behavior deferral cases pending."
     },
     "tests/test_agent_runner_sync.py": {
       "status": "pending",
