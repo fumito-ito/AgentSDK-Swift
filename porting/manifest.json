@@ -3308,9 +3308,12 @@
       "notes": ""
     },
     "tests/test_extra_headers.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/ExtraHeadersTests.swift",
+        "Tests/AgentsTests/Support/HTTPStub.swift"
+      ],
+      "notes": "Responses case ported via HTTPStub; Chat Completions case pending the Chat Completions port."
     },
     "tests/test_financial_research_budget.py": {
       "status": "skipped",
@@ -3472,9 +3475,11 @@
       "notes": ""
     },
     "tests/test_openai_provider_client_options.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/OpenAIProviderClientOptionsTests.swift"
+      ],
+      "notes": "Websocket and empty base_url cases skipped (no websocket transport; baseURL is URL)."
     },
     "tests/test_output_guardrail_cancellation.py": {
       "status": "ported",
