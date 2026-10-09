@@ -13,6 +13,7 @@ Swift-specific deviations from openai-agents-python. Each entry records what dif
 - **Decision:** `agents.sandbox`, `agents.extensions`, and modules that only adapt third-party Python libraries are not ported.
 - **Why:** They wrap Python-only ecosystems (Docker/E2B/Modal sandboxes, LiteLLM, SQLAlchemy, Redis clients) with no Swift counterpart worth maintaining.
 - **Apply:** Record these files as `out_of_scope` in `porting/manifest.json`. Core code paths that reference them (for example sandbox agent preparation) are omitted, and the omission is noted at the call site.
+- **Exception:** `agents.extensions.handoff_prompt` and `agents.extensions.handoff_filters` are pure SDK code with no third-party dependency, so they are ported into `Sources/Agents/Extensions/`.
 
 ## D3. No third-party OpenAI SDK; JSON-backed wire types
 

@@ -120,14 +120,24 @@ func logActionWarning(_ message: String, _ error: any Error) {
 
 /// Debug flags read from the environment (src/agents/_debug.py).
 public enum AgentsDebug {
-    private static func flag(_ name: String, default defaultValue: Bool) -> Bool {
-        guard let value = ProcessInfo.processInfo.environment[name] else { return defaultValue }
+    private static func flag(_ name: String, default defaultValue: Bool, environment: [String: String]) -> Bool {
+        guard let value = environment[name] else { return defaultValue }
         return value == "1" || value.lowercased() == "true"
     }
 
+    /// Reads `OPENAI_AGENTS_DONT_LOG_MODEL_DATA`, defaulting to `true`.
+    static func loadDontLogModelData(environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
+        flag("OPENAI_AGENTS_DONT_LOG_MODEL_DATA", default: true, environment: environment)
+    }
+
+    /// Reads `OPENAI_AGENTS_DONT_LOG_TOOL_DATA`, defaulting to `true`.
+    static func loadDontLogToolData(environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
+        flag("OPENAI_AGENTS_DONT_LOG_TOOL_DATA", default: true, environment: environment)
+    }
+
     private static let state = SharedBox((
-        dontLogModelData: flag("OPENAI_AGENTS_DONT_LOG_MODEL_DATA", default: true),
-        dontLogToolData: flag("OPENAI_AGENTS_DONT_LOG_TOOL_DATA", default: true)
+        dontLogModelData: loadDontLogModelData(),
+        dontLogToolData: loadDontLogToolData()
     ))
 
     /// Task-scoped overrides for the flags, used by `withOverrides`.

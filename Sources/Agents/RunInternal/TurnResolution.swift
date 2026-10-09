@@ -657,6 +657,35 @@ func getSingleStepResultFromResponse(
     )
 }
 
+/// Rebuilds the interrupted turn's function results in response order, combining results executed
+/// on resume with `function_call_output` items committed earlier (including rejections).
+func interruptedTurnFunctionResults(
+    functionRuns: [ToolRunFunction],
+    executedResults: [FunctionToolResult],
+    completedItems: [RunItem]
+) -> [FunctionToolResult] {
+    var resultsByCallId: [String: FunctionToolResult] = [:]
+    for result in executedResults {
+        if let callId = result.runItem?.rawItem.string("call_id") {
+            resultsByCallId[callId] = result
+        }
+    }
+    var completedOutputs: [String: ToolCallOutputItem] = [:]
+    for case let item as ToolCallOutputItem in completedItems where item.rawItem.type == "function_call_output" {
+        if let callId = item.callId {
+            completedOutputs[callId] = item
+        }
+    }
+    return functionRuns.compactMap { run in
+        let callId = run.toolCall.callId
+        if let result = resultsByCallId[callId] {
+            return result
+        }
+        guard let outputItem = completedOutputs[callId] else { return nil }
+        return FunctionToolResult(tool: run.functionTool, output: outputItem.output, runItem: outputItem)
+    }
+}
+
 /// Resumes a turn that was interrupted for tool approvals.
 func resolveInterruptedTurn(
     agent: Agent,
@@ -770,7 +799,14 @@ func resolveInterruptedTurn(
         )
     }
 
-    let toolUse = try await checkForFinalOutputFromTools(agent, results.functionResults, contextWrapper)
+    // Completed siblings are deliberately skipped during resumed execution, but their results still
+    // participate in the interrupted turn's final-output decision.
+    let turnFunctionResults = interruptedTurnFunctionResults(
+        functionRuns: processedResponse.functions,
+        executedResults: results.functionResults,
+        completedItems: originalPreStepItems + newStepItems
+    )
+    let toolUse = try await checkForFinalOutputFromTools(agent, turnFunctionResults, contextWrapper)
     if toolUse.isFinalOutput {
         var finalOutput = toolUse.finalOutput
         if getOutputSchema(agent) == nil { finalOutput = finalOutput.map { stringify($0) } }

@@ -206,9 +206,11 @@
       "notes": ""
     },
     "src/agents/extensions/handoff_prompt.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Extensions/HandoffPrompt.swift"
+      ],
+      "notes": "In scope by D2 exception."
     },
     "src/agents/extensions/memory/__init__.py": {
       "status": "out_of_scope",
@@ -3039,9 +3041,11 @@
       "notes": ""
     },
     "tests/test_agent_clone_shallow_copy.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/AgentCloneShallowCopyTests.swift"
+      ],
+      "notes": "Array identity/shared-mutation checks skipped (value-type arrays)."
     },
     "tests/test_agent_config.py": {
       "status": "ported",
@@ -3232,9 +3236,11 @@
       "notes": "Exercises Python example applications."
     },
     "tests/test_debug.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/DebugTests.swift"
+      ],
+      "notes": "Environment passed explicitly instead of patching os.environ."
     },
     "tests/test_decorators.py": {
       "status": "pending",
@@ -3272,9 +3278,9 @@
       "notes": "Exercises Python example applications."
     },
     "tests/test_exception_exports.py": {
-      "status": "pending",
+      "status": "skipped",
       "swift": [],
-      "notes": ""
+      "notes": "Python package re-exports and monkeypatched pretty printer; Swift exceptions are module-level types."
     },
     "tests/test_extension_filters.py": {
       "status": "pending",
@@ -3338,8 +3344,10 @@
       "notes": ""
     },
     "tests/test_handoff_prompt.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/HandoffPromptTests.swift"
+      ],
       "notes": ""
     },
     "tests/test_handoff_tool.py": {
@@ -3444,8 +3452,10 @@
       "notes": ""
     },
     "tests/test_output_guardrail_cancellation.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/OutputGuardrailCancellationTests.swift"
+      ],
       "notes": ""
     },
     "tests/test_output_tool.py": {
@@ -3533,14 +3543,18 @@
       "notes": "release_agents/weakref cases skipped."
     },
     "tests/test_resume_tool_use_behavior.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/ResumeToolUseBehaviorTests.swift"
+      ],
+      "notes": "serialized=True cases pending RunState.to_string/from_string."
     },
     "tests/test_run.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/RunTests.swift"
+      ],
+      "notes": "run_sync skipped; counting AgentRunner subclass replaces mock."
     },
     "tests/test_run_config.py": {
       "status": "partial",
@@ -3562,8 +3576,10 @@
       "notes": "_to_str_or_none skipped (Swift string conversion cannot raise)."
     },
     "tests/test_run_error_details.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/RunErrorDetailsTests.swift"
+      ],
       "notes": ""
     },
     "tests/test_run_examples_script.py": {
@@ -3782,8 +3798,10 @@
       "notes": ""
     },
     "tests/test_tool_metadata.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ToolMetadataTests.swift"
+      ],
       "notes": ""
     },
     "tests/test_tool_name_collision_policy.py": {
@@ -3844,8 +3862,10 @@
       "notes": ""
     },
     "tests/test_transforms.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/TransformsTests.swift"
+      ],
       "notes": ""
     },
     "tests/test_update_rclone_pin.py": {
