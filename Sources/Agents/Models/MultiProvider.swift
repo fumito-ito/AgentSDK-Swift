@@ -9,6 +9,8 @@ import Foundation
 public final class MultiProviderMap: @unchecked Sendable {
     private let lock = NSLock()
     private var mapping: [String: any ModelProvider] = [:]
+    /// Prefixes in insertion order, matching Python dict ordering.
+    private var order: [String] = []
 
     public init() {}
 
@@ -30,7 +32,15 @@ public final class MultiProviderMap: @unchecked Sendable {
     public func setMapping(_ newMapping: [String: any ModelProvider]) {
         lock.lock()
         mapping = newMapping
+        order = newMapping.keys.sorted()
         lock.unlock()
+    }
+
+    /// Providers in insertion order.
+    var orderedProviders: [any ModelProvider] {
+        lock.lock()
+        defer { lock.unlock() }
+        return order.compactMap { mapping[$0] }
     }
 
     /// Returns the provider for `prefix`, e.g. `"openai"` or `"my_prefix"`.
@@ -43,6 +53,7 @@ public final class MultiProviderMap: @unchecked Sendable {
     /// Adds a prefix → provider mapping.
     public func addProvider(_ prefix: String, _ provider: any ModelProvider) {
         lock.lock()
+        if mapping[prefix] == nil { order.append(prefix) }
         mapping[prefix] = provider
         lock.unlock()
     }
@@ -51,6 +62,7 @@ public final class MultiProviderMap: @unchecked Sendable {
     public func removeProvider(_ prefix: String) {
         lock.lock()
         mapping.removeValue(forKey: prefix)
+        order.removeAll { $0 == prefix }
         lock.unlock()
     }
 }
@@ -145,13 +157,26 @@ public final class MultiProvider: ModelProvider, @unchecked Sendable {
     }
 
     /// Closes cached resources held by child providers.
-    public func aclose() async {
+    ///
+    /// Every provider is closed even when one fails; the first failure is rethrown afterwards.
+    /// Cancellation propagates immediately.
+    public func aclose() async throws {
         var providers: [any ModelProvider] = [openAIProvider]
-        providers.append(contentsOf: providerMap?.getMapping().values.map { $0 } ?? [])
+        providers.append(contentsOf: providerMap?.orderedProviders ?? [])
         var seen: Set<ObjectIdentifier> = []
+        var firstError: (any Error)?
         for provider in providers where provider !== self {
             guard seen.insert(ObjectIdentifier(provider)).inserted else { continue }
-            await provider.aclose()
+            do {
+                try await provider.aclose()
+            } catch let cancellation as CancellationError {
+                throw cancellation
+            } catch {
+                if firstError == nil { firstError = error }
+            }
+        }
+        if let firstError {
+            throw firstError
         }
     }
 }

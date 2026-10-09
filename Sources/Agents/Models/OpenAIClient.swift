@@ -199,8 +199,10 @@ public final class OpenAIClient: @unchecked Sendable {
         let body = try? JSONValue.parse(data)
         let errorObject = body?.objectValue?["error"]?.objectValue
         let message = errorObject?.string("message") ?? String(data: data, encoding: .utf8) ?? "HTTP \(status)"
-        let retryAfter = response?.value(forHTTPHeaderField: "retry-after-ms").flatMap(Double.init).map { $0 / 1000 }
-            ?? response?.value(forHTTPHeaderField: "retry-after").flatMap(Double.init)
+        let headers = response?.allHeaderFields.reduce(into: [String: String]()) { result, pair in
+            if let key = pair.key as? String, let value = pair.value as? String { result[key] = value }
+        }
+        let retryAfter = getRetryAfter(headers)
         return OpenAIAPIError(
             statusCode: status,
             errorCode: errorObject?.string("code"),

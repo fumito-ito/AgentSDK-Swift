@@ -578,9 +578,12 @@
       "notes": ""
     },
     "src/agents/models/_retry_runtime.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/Models/RetryRuntime.swift",
+        "Sources/Agents/RunInternal/ModelRetry.swift"
+      ],
+      "notes": "Header parsing ported; attribute/__cause__ introspection replaced by typed ModelAPIError."
     },
     "src/agents/models/_run_context.py": {
       "status": "pending",
@@ -2380,8 +2383,10 @@
       "notes": ""
     },
     "tests/models/test_default_models.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Models/DefaultModelsTests.swift"
+      ],
       "notes": ""
     },
     "tests/models/test_extended_thinking_message_order.py": {
@@ -2445,9 +2450,11 @@
       "notes": "LiteLLM extension."
     },
     "tests/models/test_map.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Models/MapTests.swift"
+      ],
+      "notes": "litellm/any-llm (D2), websocket, and invalid prefix-mode tests skipped."
     },
     "tests/models/test_model_payload_iterators.py": {
       "status": "pending",
@@ -2495,9 +2502,11 @@
       "notes": "Type-impossible cases skipped (non-int max_num_results, pydantic filter models, positional WebSearchTool args, __all__ export)."
     },
     "tests/models/test_openai_retry_helpers.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Models/OpenAIRetryHelpersTests.swift"
+      ],
+      "notes": "Attribute/__cause__ introspection and websocket unsafe_to_replay tests skipped."
     },
     "tests/models/test_reasoning_content.py": {
       "status": "pending",
@@ -2510,8 +2519,10 @@
       "notes": ""
     },
     "tests/models/test_remove_openai_responses_api_incompatible_fields.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Models/RemoveOpenAIResponsesAPIIncompatibleFieldsTests.swift"
+      ],
       "notes": ""
     },
     "tests/models/test_responses_websocket_session.py": {

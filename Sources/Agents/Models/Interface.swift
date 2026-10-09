@@ -89,11 +89,11 @@ public protocol ModelProvider: AnyObject, Sendable {
     /// Gets a model by name.
     func getModel(_ modelName: String?) throws -> any Model
     /// Releases any resources held by the provider.
-    func aclose() async
+    func aclose() async throws
 }
 
 extension ModelProvider {
-    public func aclose() async {}
+    public func aclose() async throws {}
 }
 
 /// The model used by an agent or run: a name resolved by the provider, or a model instance.
