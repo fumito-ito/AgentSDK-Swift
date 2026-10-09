@@ -769,9 +769,11 @@
       "notes": ""
     },
     "src/agents/repl.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Repl.swift"
+      ],
+      "notes": "Input/output closures are injectable (default stdin/stdout)."
     },
     "src/agents/responses_websocket_session.py": {
       "status": "pending",
@@ -3537,8 +3539,10 @@
       "notes": "Python released-API manifest."
     },
     "tests/test_repl.py": {
-      "status": "pending",
-      "swift": [],
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ReplTests.swift"
+      ],
       "notes": ""
     },
     "tests/test_repository_workflow_interfaces.py": {
