@@ -17,7 +17,7 @@ A Swift implementation of the OpenAI Agents SDK, allowing you to build AI agent 
 
 ## Requirements
 
-- Swift 6.0+
+- Swift 6.0+ (developed with Swift 6.3)
 - macOS 13.0+ / iOS 16.0+
 - OpenAI API Key
 
@@ -149,6 +149,19 @@ export OPENAI_API_KEY=your_api_key_here
 # Run the example
 swift run SimpleApp
 ```
+
+## Development
+
+The repository pins its developer tools with [mise](https://mise.jdx.dev) and wraps common commands in a `Makefile`. The targets work with either a full Xcode installation or the Command Line Tools only.
+
+```bash
+make bootstrap   # install pinned tools (SwiftLint, uv, Python) and resolve packages
+make check       # lint + build + test
+make test FILTER=AgentTests   # run a subset of tests
+make upstream    # check out the tracked openai-agents-python release into .vendor/
+```
+
+`UPSTREAM_VERSION` records the openai-agents-python release this port tracks.
 
 ## Documentation
 

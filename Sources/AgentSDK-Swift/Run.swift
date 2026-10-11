@@ -70,21 +70,19 @@ public final class Run<Context> {
             }
 
             // Check for handoffs before running the agent
-            for handoff in agent.handoffs {
-                if handoff.filter.shouldHandoff(input: validatedInput, context: runContext.value) {
-                    let handoffRun = Run(
-                        agent: handoff.agent,
-                        input: validatedInput,
-                        context: runContext.value,
-                        model: model,
-                        maxTurns: maxTurns
-                    )
-                    let result = try await handoffRun.execute()
-                    runContext.mergeUsage(from: handoffRun.runContext)
-                    messages = handoffRun.messages
-                    state = .completed
-                    return result
-                }
+            for handoff in agent.handoffs where handoff.filter.shouldHandoff(input: validatedInput, context: runContext.value) {
+                let handoffRun = Run(
+                    agent: handoff.agent,
+                    input: validatedInput,
+                    context: runContext.value,
+                    model: model,
+                    maxTurns: maxTurns
+                )
+                let result = try await handoffRun.execute()
+                runContext.mergeUsage(from: handoffRun.runContext)
+                messages = handoffRun.messages
+                state = .completed
+                return result
             }
 
             messages.append(.user(validatedInput))

@@ -1,0 +1,7 @@
+# Developer tool versions for this repository.
+# Install with `mise install` (https://mise.jdx.dev).
+[tools]
+swiftlint = "0.65.1"
+# Used to run the upstream openai-agents-python test suite as a reference oracle.
+uv = "latest"
+python = "3.12"

@@ -4,5 +4,40 @@ included:
 excluded:
   - Examples
   - .build
+  - .vendor
   - .vscode
   - .github
+
+# The SDK mirrors the module layout of openai-agents-python, whose modules are
+# large and model deeply nested wire formats. Limits are relaxed accordingly.
+line_length:
+  warning: 140
+  error: 200
+  ignores_comments: true
+  ignores_urls: true
+file_length:
+  warning: 1500
+  error: 3000
+type_body_length:
+  warning: 600
+  error: 1200
+function_body_length:
+  warning: 120
+  error: 250
+cyclomatic_complexity:
+  warning: 25
+  error: 40
+nesting:
+  type_level: 3
+identifier_name:
+  min_length: 1
+  excluded:
+    - id
+type_name:
+  max_length: 60
+large_tuple:
+  warning: 4
+disabled_rules:
+  # Public initializers mirror the keyword arguments of the Python SDK
+  # (for example `ModelSettings` and `RunConfig`), which have many parameters.
+  - function_parameter_count

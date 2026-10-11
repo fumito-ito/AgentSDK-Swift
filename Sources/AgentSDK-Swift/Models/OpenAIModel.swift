@@ -2,7 +2,6 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
-import OpenAPIRuntime
 
 /// Implementation of ModelInterface for OpenAI models
 public final class OpenAIModel: ModelInterface {
@@ -112,22 +111,20 @@ public final class OpenAIModel: ModelInterface {
         }
 
         let lines = responseStr.split(separator: "\n")
-        for line in lines {
-            if line.hasPrefix("data: ") {
-                let dataContent = line.dropFirst(6)
+        for line in lines where line.hasPrefix("data: ") {
+            let dataContent = line.dropFirst(6)
 
-                if dataContent == "[DONE]" {
-                    await callback(.end)
-                    continue
-                }
-
-                try await processStreamChunk(
-                    dataContent,
-                    contentBuffer: &contentBuffer,
-                    toolCalls: &toolCalls,
-                    callback: callback
-                )
+            if dataContent == "[DONE]" {
+                await callback(.end)
+                continue
             }
+
+            try await processStreamChunk(
+                dataContent,
+                contentBuffer: &contentBuffer,
+                toolCalls: &toolCalls,
+                callback: callback
+            )
         }
 
         return ModelResponse(content: contentBuffer, toolCalls: toolCalls)

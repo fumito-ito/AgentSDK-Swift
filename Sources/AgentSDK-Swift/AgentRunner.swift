@@ -86,20 +86,18 @@ public struct AgentRunner {
             }
         }
 
-        for handoff in agent.handoffs {
-            if handoff.filter.shouldHandoff(input: validatedInput, context: runContext.value) {
-                let result = try await runStreamedInternal(
-                    agent: handoff.agent,
-                    input: validatedInput,
-                    runContext: runContext,
-                    model: model,
-                    settings: handoff.agent.modelSettings,
-                    streamHandler: streamHandler,
-                    turn: turn,
-                    maxTurns: maxTurns
-                )
-                return result
-            }
+        for handoff in agent.handoffs where handoff.filter.shouldHandoff(input: validatedInput, context: runContext.value) {
+            let result = try await runStreamedInternal(
+                agent: handoff.agent,
+                input: validatedInput,
+                runContext: runContext,
+                model: model,
+                settings: handoff.agent.modelSettings,
+                streamHandler: streamHandler,
+                turn: turn,
+                maxTurns: maxTurns
+            )
+            return result
         }
 
         var messages: [Message] = []
