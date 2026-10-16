@@ -194,26 +194,3 @@ final class AgentToolUseTracker: @unchecked Sendable {
         }
     }
 }
-
-/// Builds a name → agent map by walking handoffs and agent tools from `startingAgent`.
-func buildAgentMap(_ startingAgent: Agent) -> [String: Agent] {
-    var map: [String: Agent] = [:]
-    var queue: [Agent] = [startingAgent]
-    var visited: Set<ObjectIdentifier> = []
-    while !queue.isEmpty {
-        let agent = queue.removeFirst()
-        guard visited.insert(ObjectIdentifier(agent)).inserted else { continue }
-        if map[agent.name] == nil { map[agent.name] = agent }
-        for target in agent.handoffs {
-            switch target {
-            case .agent(let other): queue.append(other)
-            case .handoff(let handoff):
-                if let other = handoff.agentRef as? Agent { queue.append(other) }
-            }
-        }
-        for case let tool as FunctionTool in agent.tools {
-            if let nested = tool.agentInstance { queue.append(nested) }
-        }
-    }
-    return map
-}

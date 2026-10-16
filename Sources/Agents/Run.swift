@@ -1072,7 +1072,7 @@ private final class RunDriver: @unchecked Sendable {
         if let streamed, handlerResult.includeInHistory {
             streamStepItems([synthesized], to: streamed)
         }
-        return makeResult(input: originalInput, finalOutput: validated, interruptions: runState.getInterruptions())
+        return makeResult(input: originalInput, finalOutput: validated, interruptions: runState.pendingInterruptions)
     }
 
     /// Persists and records max-turns handler items. Returns the number of items persisted.
