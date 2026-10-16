@@ -180,17 +180,30 @@ final class AgentToolUseTracker: @unchecked Sendable {
         return snapshot.mapValues { $0.sorted() }
     }
 
-    /// Restores tracked usage from a serialized snapshot, resolving agent names from `startingAgent`.
+    /// Converts the tracker into a snapshot keyed by stable agent identity (upstream
+    /// `serialize_tool_use_tracker`), so duplicate-name agents keep separate entries.
+    func serialize(startingAgent: Agent?) -> [String: [String]] {
+        let identityKeys = startingAgent.map(buildAgentIdentityKeysById)
+        lock.lock()
+        defer { lock.unlock() }
+        var snapshot: [String: [String]] = [:]
+        for (agent, tools) in agentToTools {
+            let key = identityKeys?[ObjectIdentifier(agent)] ?? agent.name
+            snapshot[key, default: []].append(contentsOf: tools)
+        }
+        return snapshot
+    }
+
+    /// Seeds the tracker from a serialized snapshot (upstream `hydrate_tool_use_tracker`).
+    ///
+    /// Keys are resolved as agent identities first, then as agent names; unknown keys are skipped.
     func hydrate(from snapshot: [String: [String]], startingAgent: Agent) {
+        guard !snapshot.isEmpty else { return }
         let agentsByName = buildAgentMap(startingAgent)
-        for (name, tools) in snapshot {
-            if let agent = agentsByName[name] {
-                addToolUse(agent, tools)
-            } else {
-                lock.lock()
-                agentMap[name, default: []].formUnion(tools)
-                lock.unlock()
-            }
+        let agentsByIdentity = buildAgentIdentityMap(startingAgent)
+        for (key, tools) in snapshot {
+            guard let agent = agentsByIdentity[key] ?? agentsByName[key] else { continue }
+            addToolUse(agent, tools)
         }
     }
 }

@@ -903,7 +903,7 @@
       "swift": [
         "Sources/Agents/RunInternal/OAIConversation.swift"
       ],
-      "notes": "Identity tracking via RunItem identities."
+      "notes": "Pending-input lineage is matched by content (D11). Pending: session-history hydration, accepted input ids by occurrence, and anonymous tool_search restoration."
     },
     "src/agents/run_internal/prompt_cache_key.py": {
       "status": "pending",
@@ -935,7 +935,7 @@
       "swift": [
         "Sources/Agents/RunInternal/SessionPersistence.swift"
       ],
-      "notes": "Pending-write checkpoints and compaction generations not ported."
+      "notes": "Pending-write checkpoints and compaction generations not ported. admit_pending_input and commit_server_pending_input live in Run.swift (admitPendingInput, commitServerPendingInput)."
     },
     "src/agents/run_internal/streaming.py": {
       "status": "partial",
@@ -3689,9 +3689,11 @@
       "notes": "Pending until their modules are ported: tool invocation ledger and hosted MCP query approval cases, nested agent-tool state cases (agent_tool_state.py), programmatic tool calling resume checks (tool_caller.py), and nested history ownership round trips. Skipped: pydantic/deepcopy snapshot cases, Python truthiness, bare string input items, ad-hoc tool attributes, and sandbox cases (out of scope). Each file lists the cases at its top."
     },
     "tests/test_run_state_agent_identity.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/RunStateAgentIdentityTests.swift"
+      ],
+      "notes": "Skipped: falsy agent (no truthiness), sandbox capability identity (out of scope), and legacy duck-typed handoff wrappers (typed HandoffTarget)."
     },
     "tests/test_run_state_compatibility_corpus.py": {
       "status": "pending",
@@ -3699,9 +3701,11 @@
       "notes": ""
     },
     "tests/test_run_state_pending_input.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/RunStatePendingInputTests.swift"
+      ],
+      "notes": "Pending: server-acceptance cases that need the accepted-response resume state and the tool invocation ledger. Skipped: in-place filter rewrite (D11)."
     },
     "tests/test_run_step_execution.py": {
       "status": "pending",
