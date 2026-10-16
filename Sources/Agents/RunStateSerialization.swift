@@ -439,6 +439,28 @@ extension RunState {
         return ["start": .int(start), "end": .int(generated.count), "interruptions": .array(interruptionIndexes)]
     }
 
+    /// Finds the function name for `callId` in generated items, the last processed response, or
+    /// the original input.
+    func lookupFunctionName(_ callId: String) -> String {
+        guard !callId.isEmpty else { return "" }
+        func name(in raw: JSONObject) -> String? {
+            guard raw.string("call_id") == callId else { return nil }
+            return raw.string("name") ?? ""
+        }
+        for item in generatedItems where item.type == "tool_call_item" {
+            if let found = name(in: item.rawItem) { return found }
+        }
+        for item in lastProcessedResponse?.newItems ?? [] where item.type == "tool_call_item" {
+            if let found = name(in: item.rawItem) { return found }
+        }
+        if case .items(let items) = originalInput {
+            for item in items where item.type == "function_call" {
+                if let found = name(in: item) { return found }
+            }
+        }
+        return ""
+    }
+
     // MARK: Steps
 
     func serializeCurrentStep(_ identityKeys: [ObjectIdentifier: String]?) -> JSONValue {

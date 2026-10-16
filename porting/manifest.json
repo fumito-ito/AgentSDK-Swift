@@ -47,9 +47,11 @@
       "notes": ""
     },
     "src/agents/_run_state_agent_identity.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/RunStateAgentIdentity.swift"
+      ],
+      "notes": "Agent signatures use Swift-describable configuration (D14); sandbox capability signatures are out of scope."
     },
     "src/agents/_tool_identity.py": {
       "status": "ported",
@@ -846,7 +848,7 @@
         "Sources/Agents/Run.swift",
         "Sources/Agents/RunInternal/TurnPreparation.swift"
       ],
-      "notes": ""
+      "notes": "resolve_resumed_context is resolveResumedContext in Run.swift."
     },
     "src/agents/run_internal/agent_tool_configuration.py": {
       "status": "pending",
@@ -993,9 +995,11 @@
     "src/agents/run_state.py": {
       "status": "partial",
       "swift": [
-        "Sources/Agents/RunState.swift"
+        "Sources/Agents/RunState.swift",
+        "Sources/Agents/RunStateSerialization.swift",
+        "Sources/Agents/RunStateDeserialization.swift"
       ],
-      "notes": "In-process resume only; JSON serialization pending."
+      "notes": "JSON serialization (schema 1.18) ported (D13). Pending: tool invocation ledger (tool_invocations is written empty), agent-owned function approvals (restored into tool-name approvals), hosted MCP query records, nested agent-tool run states, nested history ownership retention (validated, then dropped), pending Session writes, terminal-unrecoverable marker, programmatic tool calling resume checks, current-response item identity restore, error redaction, and sandbox payloads (out of scope)."
     },
     "src/agents/sandbox/__init__.py": {
       "status": "out_of_scope",
@@ -3120,7 +3124,7 @@
         "Tests/AgentsTests/AgentRunnerTests+Collisions.swift",
         "Tests/AgentsTests/AgentRunnerTests+Utilities.swift"
       ],
-      "notes": "Blocked-output, sandbox, SQLite/OpenAI conversation sessions, RunState serialization, and execute_approved_tools cases pending/skipped."
+      "notes": "Blocked-output, sandbox, SQLite/OpenAI conversation sessions, and execute_approved_tools cases pending/skipped."
     },
     "tests/test_agent_runner_streamed.py": {
       "status": "partial",
@@ -3473,9 +3477,10 @@
     "tests/test_max_turns.py": {
       "status": "partial",
       "swift": [
-        "Tests/AgentsTests/MaxTurnsTests.swift"
+        "Tests/AgentsTests/MaxTurnsTests.swift",
+        "Tests/AgentsTests/MaxTurnsTests+ResumedState.swift"
       ],
-      "notes": "SQLiteSession and RunState serialization cases pending."
+      "notes": "SQLiteSession cases use SimpleListSession. Pending: raw handler output, session cancellation and failure, and resumed output guardrail result cases."
     },
     "tests/test_mcp_tool_metadata.py": {
       "status": "pending",
@@ -3595,11 +3600,11 @@
       "notes": "release_agents/weakref cases skipped."
     },
     "tests/test_resume_tool_use_behavior.py": {
-      "status": "partial",
+      "status": "ported",
       "swift": [
         "Tests/AgentsTests/ResumeToolUseBehaviorTests.swift"
       ],
-      "notes": "serialized=True cases pending RunState.to_string/from_string."
+      "notes": ""
     },
     "tests/test_run.py": {
       "status": "ported",
@@ -3672,9 +3677,16 @@
       "notes": "pytest serial runner."
     },
     "tests/test_run_state.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/RunStateTests.swift",
+        "Tests/AgentsTests/RunStateTests+SerializationRoundTrip.swift",
+        "Tests/AgentsTests/RunStateTests+Resumption.swift",
+        "Tests/AgentsTests/RunStateTests+SerializationEdgeCases.swift",
+        "Tests/AgentsTests/RunStateTests+SchemaEdgeCases.swift",
+        "Tests/AgentsTests/RunStateTests+ToolApprovalItem.swift"
+      ],
+      "notes": "Pending until their modules are ported: tool invocation ledger and hosted MCP query approval cases, nested agent-tool state cases (agent_tool_state.py), programmatic tool calling resume checks (tool_caller.py), and nested history ownership round trips. Skipped: pydantic/deepcopy snapshot cases, Python truthiness, bare string input items, ad-hoc tool attributes, and sandbox cases (out of scope). Each file lists the cases at its top."
     },
     "tests/test_run_state_agent_identity.py": {
       "status": "pending",
@@ -4005,16 +4017,18 @@
       "notes": ""
     },
     "tests/utils/factories.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Utils/Factories.swift"
+      ],
+      "notes": "TestSessionState builds sandbox state and is out of scope."
     },
     "tests/utils/hitl.py": {
       "status": "partial",
       "swift": [
         "Tests/AgentsTests/Utils/HITL.swift"
       ],
-      "notes": ""
+      "notes": "Builders and resume helpers used by the ported tests; the remaining scenario helpers are ported with the tests that need them."
     },
     "tests/utils/simple_session.py": {
       "status": "ported",

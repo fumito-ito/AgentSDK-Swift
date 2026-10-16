@@ -5,9 +5,8 @@ import AgentsTesting
 
 // Ported from tests/test_max_turns.py.
 //
-// Swift: `SQLiteSession` cases use `SimpleListSession` until the SQLite session is ported. Tests
-// that inspect `RunState.to_json()` or resume serialized states are pending the RunState
-// serialization port.
+// Swift: `SQLiteSession` cases use `SimpleListSession` until the SQLite session is ported. The
+// resumed-state cases that inspect `RunState.to_json()` are in MaxTurnsTests+ResumedState.swift.
 @Suite struct MaxTurnsTests {
     private struct Foo: Codable, Sendable {
         var a: String

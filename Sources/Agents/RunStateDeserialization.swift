@@ -188,14 +188,20 @@ func buildRunStateFromJSON(
         )
     }
 
-    try restoreSessionItems(
+    let session = try restoreSessionItems(
         state,
         stateJSON,
         agents: agents,
         serializedGeneratedItems: serializedGeneratedItems,
         generatedSourceIndexes: generatedSourceIndexes
     )
-    try validateNestedHistoryOwnershipShape(stateJSON["nested_history_owned_session_item_refs"])
+    try validateNestedHistoryOwnership(
+        state,
+        stateJSON["nested_history_owned_session_item_refs"],
+        hasSessionItems: stateJSON.contains("session_items"),
+        serializedSessionItemCount: session.serializedCount,
+        sessionSourceIndexes: session.sourceIndexes
+    )
 
     state.markGeneratedItemsMergedWithLastProcessed()
 
@@ -225,7 +231,7 @@ private func restoreSessionItems(
     agents: RunStateAgentResolver,
     serializedGeneratedItems: [JSONValue],
     generatedSourceIndexes: [Int]
-) throws {
+) throws -> (serializedCount: Int, sourceIndexes: [Int]) {
     let serializedSessionItems: [JSONValue]
     let sessionSourceIndexes: [Int]
     if stateJSON.contains("session_items") {
@@ -246,6 +252,7 @@ private func restoreSessionItems(
         serializedSessionItems: serializedSessionItems,
         sessionSourceIndexes: sessionSourceIndexes
     )
+    return (serializedSessionItems.count, sessionSourceIndexes)
 }
 
 private func restoreGuardrailResults(_ state: RunState, _ stateJSON: JSONObject, agents: RunStateAgentResolver, currentAgent: Agent) throws {
@@ -410,7 +417,7 @@ private func restoreFunctionToolApprovals(_ value: JSONValue?, schema: (Int, Int
     if !entries.isEmpty, schema < (1, 18) {
         throw UserError("Agent-owned function approvals require RunState schema 1.18.")
     }
-    let ambiguous = entries.isEmpty ? [] : getAmbiguousAgentIds(agents.initialAgent)
+    let ambiguous = entries.isEmpty ? [] : (agents.initialAgent.map(getAmbiguousAgentIds) ?? [])
     for entry in entries {
         guard let entry = entry.objectValue, let toolKey = entry.string("tool_key"), let decision = entry["decision"]?.objectValue else {
             throw UserError("Invalid agent-owned function approval record.")
@@ -437,14 +444,21 @@ private func toolUseTrackerSnapshot(from value: JSONValue?) -> [String: [String]
 
 /// Resolves serialized agent references against the restored agent graph.
 struct RunStateAgentResolver {
-    let initialAgent: Agent
+    let initialAgent: Agent?
     let agentMap: [String: Agent]
-    let identityMap: [String: Agent]
+    let identityMap: [String: Agent]?
 
     init(initialAgent: Agent) {
         self.initialAgent = initialAgent
         agentMap = buildAgentMap(initialAgent)
         identityMap = buildAgentIdentityMap(initialAgent)
+    }
+
+    /// Resolves names against an explicit map, without duplicate-name identities.
+    init(agentMap: [String: Agent]) {
+        initialAgent = nil
+        self.agentMap = agentMap
+        identityMap = nil
     }
 
     /// Resolves an agent from serialized data, falling back to `fallbackAgent`.
@@ -460,12 +474,12 @@ struct RunStateAgentResolver {
         default:
             break
         }
-        if let agentIdentity {
+        if let agentIdentity, let identityMap {
             if let resolved = identityMap[agentIdentity] { return resolved }
             throw UserError("Run state references an agent identity that is not present in the restored graph")
         }
         if let agentName, !agentName.isEmpty {
-            return identityMap[agentName] ?? agentMap[agentName] ?? fallbackAgent
+            return identityMap?[agentName] ?? agentMap[agentName] ?? fallbackAgent
         }
         return fallbackAgent
     }
@@ -586,7 +600,10 @@ func deserializeRunItem(_ entry: JSONValue, agents: RunStateAgentResolver) throw
             }
             return InputItem(agent: agent, rawItem: rawItem)
         case "message_output_item":
-            return MessageOutputItem(agent: agent, rawItem: normalizeMessageOutputItem(rawItem))
+            let message = normalizeMessageOutputItem(rawItem)
+            // Swift: mirrors pydantic validation of `ResponseOutputMessage`; only `status` may be missing.
+            try validateRequiredFields(message, ["id", "content", "role"], itemType: itemType)
+            return MessageOutputItem(agent: agent, rawItem: message)
         case "tool_search_call_item":
             return ToolSearchCallItem(agent: agent, rawItem: rawItem)
         case "tool_search_output_item":
@@ -707,24 +724,53 @@ private func restoreGeneratedSessionOccurrences(
     }
 }
 
-/// Validates the nested history ownership sidecar shape.
+/// Validates the nested history ownership sidecar.
 ///
 /// Swift: nested handoff history ownership is not tracked on `RunState` yet, so valid entries are
-/// accepted and dropped.
-private func validateNestedHistoryOwnershipShape(_ value: JSONValue?) throws {
-    guard let value, !value.isNull else { return }
-    guard let refs = value.arrayValue else {
-        throw UserError("Run state nested_history_owned_session_item_refs must be a list of objects")
+/// checked exactly like upstream and then dropped.
+private func validateNestedHistoryOwnership(
+    _ state: RunState,
+    _ value: JSONValue?,
+    hasSessionItems: Bool,
+    serializedSessionItemCount: Int,
+    sessionSourceIndexes: [Int]
+) throws {
+    let refs: [JSONValue]
+    switch value {
+    case nil: refs = []
+    case .array(let list)?: refs = list
+    default: throw UserError("Run state nested_history_owned_session_item_refs must be a list of objects")
+    }
+    var restoredSessionIndexes: [Int: Int] = [:]
+    for (restoredIndex, sourceIndex) in sessionSourceIndexes.enumerated() {
+        restoredSessionIndexes[sourceIndex] = restoredIndex
     }
     for ref in refs {
         guard let ref = ref.objectValue,
-              case .int(let index)? = ref["index"], index >= 0,
+              case .int(let sessionSourceIndex)? = ref["index"], sessionSourceIndex >= 0,
               let digest = ref.string("digest"), digest.count == 64,
               case .int(let inputIndex)? = ref["input_index"], inputIndex >= 0 else {
             throw UserError(
                 "Run state nested_history_owned_session_item_refs entries must contain a "
                     + "non-negative integer index and input_index, and 64-character digest"
             )
+        }
+        if hasSessionItems, sessionSourceIndex >= serializedSessionItemCount {
+            throw UserError("Run state nested history ownership references a missing session item")
+        }
+        guard let sessionIndex = restoredSessionIndexes[sessionSourceIndex] else {
+            logger.warning("Ignoring nested history ownership for skipped session item at index \(sessionSourceIndex)")
+            continue
+        }
+        guard case .items(let originalItems) = state.originalInput, inputIndex < originalItems.count else {
+            throw UserError("Run state nested history ownership references a missing input item")
+        }
+        guard let runInputItem = try? runItemToInputItem(state.sessionItems[sessionIndex]),
+              digestInputItem(runInputItem) == digest else {
+            throw UserError("Run state nested history ownership session digest does not match")
+        }
+        guard digestInputItem(originalItems[inputIndex]) == digest else {
+            throw UserError("Run state nested history ownership input digest does not match")
         }
     }
 }

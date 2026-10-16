@@ -72,3 +72,21 @@ Swift-specific deviations from openai-agents-python. Each entry records what dif
 - **Why:** Throwing initializers would force `try` on every settings literal, including the many call sites that pass only valid constants. Validating the resolved settings still fails the run before any model call, and it also guards the timeout arithmetic against infinite or NaN values.
 - **Apply:** Ported validation tests construct the settings, then assert that `validate()` (or a run using them) throws `ValueError` with the upstream message.
 
+
+## D13. `run_state.py` is split into three Swift files
+
+- **Decision:** `src/agents/run_state.py` maps to `RunState.swift` (the class and its public pause/resume API), `RunStateSerialization.swift` (`to_json`, `to_string`, the schema version table, and the `_serialize_*` helpers), and `RunStateDeserialization.swift` (`from_json`, `from_string`, `_build_run_state_from_json`, and the `_deserialize_*` helpers). The tests in `tests/test_run_state.py` are split the same way, one Swift file per upstream test class (`RunStateTests+SerializationRoundTrip.swift`, ...).
+- **Why:** Upstream's module is over 5,000 lines and its test module almost 12,000. SwiftLint's strict `file_length` and `type_body_length` limits would fail a single file, and the two halves are independent.
+- **Apply:** When syncing `run_state.py`, put serialization changes in `RunStateSerialization.swift` and restore-side changes in `RunStateDeserialization.swift`.
+
+## D14. Duplicate-name agent identities use a Swift-describable signature
+
+- **Decision:** `_run_state_agent_identity.py` orders same-name agents by root first, then by a configuration signature, then by traversal order, as upstream does. The Swift signature covers the agent type, handoff description, static instructions, model name or model type, model settings, output type name, tool-use behavior kind, `reset_tool_choice`, tool and handoff signatures, guardrail names, MCP server names, and hook type.
+- **Why:** Upstream normalizes every attribute, including callables by qualified name. Swift closures (dynamic instructions, custom tool-use behaviors, hook methods) have no stable name, so they contribute only their kind. Sandbox capability signatures are out of scope (D2).
+- **Apply:** Identity keys (`name`, `name#2`, ...) are written to snapshots, so changes to the signature can change which duplicate receives which key. Keep the signature stable across releases.
+
+## D15. `Encodable` contexts take the place of pydantic models and dataclasses
+
+- **Decision:** `RunState.toJSON()` serializes a non-mapping context that conforms to `Encodable` and records `"original_type": "encodable"` and `"serialized_via": "encodable"` in `context_meta`, with `requires_deserializer: true`. Upstream records `pydantic`/`model_dump` and `dataclass`/`asdict` for its two structured types. Mapping contexts are `JSONObject`, `[String: JSONValue]`, and `[String: any Sendable]` dictionaries whose values are JSON-compatible.
+- **Why:** `Encodable` is Swift's single equivalent of both upstream structured types, and the restore-time behavior (warn or require a deserializer) is the same.
+- **Apply:** Snapshots written by Swift therefore contain `encodable` metadata that upstream readers treat like any custom type that requires a deserializer.

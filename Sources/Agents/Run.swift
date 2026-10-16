@@ -57,9 +57,13 @@ public enum Runner {
     }
 
     /// Resumes a run from a `RunState`, e.g. after approving or rejecting interruptions.
+    ///
+    /// Pass `context` to replace the application context of the restored `RunContextWrapper`; the
+    /// wrapper's approvals, usage, and tool input are kept.
     public static func run(
         _ startingAgent: Agent,
         state: RunState,
+        context: (any Sendable)? = nil,
         hooks: RunHooks? = nil,
         runConfig: RunConfig? = nil,
         errorHandlers: RunErrorHandlers? = nil,
@@ -68,7 +72,8 @@ public enum Runner {
         conversationId: String? = nil,
         session: (any Session)? = nil
     ) async throws -> RunResult {
-        try await getDefaultAgentRunner().run(
+        resolveResumedContext(runState: state, context: context)
+        return try await getDefaultAgentRunner().run(
             startingAgent, input: .state(state), contextWrapper: nil, maxTurns: state.maxTurns,
             hooks: hooks, runConfig: runConfig, errorHandlers: errorHandlers, previousResponseId: previousResponseId,
             autoPreviousResponseId: autoPreviousResponseId, conversationId: conversationId, session: session
@@ -120,9 +125,12 @@ public enum Runner {
     }
 
     /// Resumes a run from a `RunState` in streaming mode.
+    ///
+    /// Pass `context` to replace the application context of the restored `RunContextWrapper`.
     public static func runStreamed(
         _ startingAgent: Agent,
         state: RunState,
+        context: (any Sendable)? = nil,
         hooks: RunHooks? = nil,
         runConfig: RunConfig? = nil,
         errorHandlers: RunErrorHandlers? = nil,
@@ -131,7 +139,8 @@ public enum Runner {
         conversationId: String? = nil,
         session: (any Session)? = nil
     ) throws -> RunResultStreaming {
-        try getDefaultAgentRunner().runStreamed(
+        resolveResumedContext(runState: state, context: context)
+        return try getDefaultAgentRunner().runStreamed(
             startingAgent, input: .state(state), contextWrapper: nil, maxTurns: state.maxTurns,
             hooks: hooks, runConfig: runConfig, errorHandlers: errorHandlers, previousResponseId: previousResponseId,
             autoPreviousResponseId: autoPreviousResponseId, conversationId: conversationId, session: session
@@ -1089,4 +1098,21 @@ private final class RunDriver: @unchecked Sendable {
         sessionItems.append(contentsOf: items)
         return saved
     }
+}
+
+/// Returns the context wrapper for a resumed run, applying an optional override (upstream
+/// `resolve_resumed_context`).
+///
+/// The restored `RunContextWrapper` stays authoritative: only its application `context` value is
+/// replaced, so run-owned wrapper state (approvals, usage, turn input, tool input) survives.
+@discardableResult
+func resolveResumedContext(runState: RunState, context: (any Sendable)?) -> RunContextWrapper {
+    let existing = runState.context
+    guard let context else { return existing }
+    if let wrapper = context as? RunContextWrapper {
+        if wrapper !== existing { existing.context = wrapper.context }
+    } else {
+        existing.context = context
+    }
+    return existing
 }

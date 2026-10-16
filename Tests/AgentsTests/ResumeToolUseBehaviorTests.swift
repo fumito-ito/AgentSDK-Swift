@@ -3,9 +3,6 @@ import Testing
 import AgentsTesting
 
 // Ported from tests/test_resume_tool_use_behavior.py.
-//
-// Swift: the `serialized=True` cases need `RunState.to_string` / `from_string`, which are not
-// ported yet (porting/manifest.json records the gap).
 @Suite struct ResumeToolUseBehaviorTests {
     enum Behavior: String, CaseIterable, Sendable {
         case stopAt = "stop_at"
@@ -16,16 +13,23 @@ import AgentsTesting
     private struct Case: Sendable, CustomTestStringConvertible {
         var gatedFirst: Bool
         var streamed: Bool
+        var serialized: Bool
         var reject: Bool
         var behavior: Behavior
 
-        var testDescription: String { "gated_first=\(gatedFirst) streamed=\(streamed) reject=\(reject) behavior=\(behavior.rawValue)" }
+        var testDescription: String {
+            "gated_first=\(gatedFirst) streamed=\(streamed) serialized=\(serialized) reject=\(reject) behavior=\(behavior.rawValue)"
+        }
     }
 
     private static let cases: [Case] = [false, true].flatMap { gatedFirst in
         [false, true].flatMap { streamed in
-            [false, true].flatMap { reject in
-                Behavior.allCases.map { Case(gatedFirst: gatedFirst, streamed: streamed, reject: reject, behavior: $0) }
+            [false, true].flatMap { serialized in
+                [false, true].flatMap { reject in
+                    Behavior.allCases.map {
+                        Case(gatedFirst: gatedFirst, streamed: streamed, serialized: serialized, reject: reject, behavior: $0)
+                    }
+                }
             }
         }
     }
@@ -62,7 +66,7 @@ import AgentsTesting
         }
         let agent = Agent(name: "orders", tools: [submitOrder, notifyManager], model: .instance(model), toolUseBehavior: behavior)
 
-        let state: RunState
+        var state: RunState
         if testCase.streamed {
             let streamed = try Runner.runStreamed(agent, input: "submit an order")
             for try await _ in streamed.streamEvents() {}
@@ -71,6 +75,9 @@ import AgentsTesting
             state = try await Runner.run(agent, input: "submit an order").toState()
         }
         #expect(effects.value == ["submit"])
+        if testCase.serialized {
+            state = try await RunState.fromString(agent, try state.toString())
+        }
         for interruption in state.getInterruptions() {
             if testCase.reject {
                 try state.reject(interruption, rejectionMessage: "notification rejected")
