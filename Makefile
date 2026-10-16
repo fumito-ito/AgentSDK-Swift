@@ -35,8 +35,11 @@ bootstrap: ## Install pinned developer tools and resolve packages.
 build: ## Build all targets.
 	$(SWIFT) build
 
+# Tests never export traces or use a real API key (upstream tests/conftest.py does the same).
+TEST_ENV := OPENAI_AGENTS_DISABLE_TRACING=1 OPENAI_API_KEY=test_key
+
 test: ## Run the test suite. Pass FILTER=<pattern> to run a subset.
-	$(SWIFT) test $(TEST_FLAGS) $(if $(FILTER),--filter $(FILTER),)
+	$(TEST_ENV) $(SWIFT) test $(TEST_FLAGS) $(if $(FILTER),--filter '$(FILTER)',)
 
 lint: ## Run SwiftLint in strict mode.
 	$(LINT_ENV) $(SWIFTLINT) lint --strict --quiet

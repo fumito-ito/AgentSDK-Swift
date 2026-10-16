@@ -1,0 +1,4132 @@
+{
+  "upstream": {
+    "repo": "openai/openai-agents-python",
+    "version": "0.23.1"
+  },
+  "files": {
+    "src/agents/__init__.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/_config.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/_config_coercion.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/_debug.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Logger.swift"
+      ],
+      "notes": "Python environment debug flags; see Logger."
+    },
+    "src/agents/_function_tool_arguments.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/_httpx_compat.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "httpx compatibility shim."
+    },
+    "src/agents/_mcp_tool_metadata.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/_public_agent.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/_run_state_agent_identity.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/_tool_identity.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/ToolIdentity.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/_tool_invocation.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/agent.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/Agent.swift"
+      ],
+      "notes": "Nested agent-tool approval routing not ported."
+    },
+    "src/agents/agent_output.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/AgentOutput.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/agent_tool_input.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/AgentToolInput.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/agent_tool_state.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/apply_diff.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/ApplyDiff.swift"
+      ],
+      "notes": "Line handling on Unicode scalars to match Python code-point semantics."
+    },
+    "src/agents/computer.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Computer.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/decorators.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/editor.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Editor.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/exceptions.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Exceptions.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/extensions/__init__.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Package marker only."
+    },
+    "src/agents/extensions/experimental/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/experimental/codex/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/experimental/codex/codex.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/experimental/codex/codex_options.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/experimental/codex/codex_tool.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/experimental/codex/events.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/experimental/codex/exec.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/experimental/codex/items.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/experimental/codex/output_schema_file.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/experimental/codex/payloads.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/experimental/codex/thread.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/experimental/codex/thread_options.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/experimental/codex/turn_options.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/experimental/hosted_multi_agent/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/experimental/hosted_multi_agent/model.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/handoff_filters.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/extensions/handoff_prompt.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Extensions/HandoffPrompt.swift"
+      ],
+      "notes": "In scope by D2 exception."
+    },
+    "src/agents/extensions/memory/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/memory/_optional_imports.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/memory/advanced_sqlite_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/memory/async_sqlite_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/memory/dapr_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/memory/encrypt_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/memory/mongodb_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/memory/redis_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/memory/sqlalchemy_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/models/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/models/any_llm_model.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/models/any_llm_provider.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/models/litellm_model.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/models/litellm_provider.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/_rclone.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/blaxel/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/blaxel/mounts.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/blaxel/sandbox.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/cloudflare/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/cloudflare/mounts.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/cloudflare/sandbox.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/daytona/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/daytona/mounts.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/daytona/sandbox.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/e2b/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/e2b/mounts.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/e2b/sandbox.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/modal/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/modal/mounts.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/modal/sandbox.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/runloop/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/runloop/mounts.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/runloop/sandbox.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/vercel/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/vercel/_network_policy.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/vercel/_provider.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/vercel/mounts.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/sandbox/vercel/sandbox.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/tool_output_trimmer.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/extensions/visualization.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions wrap Python-only libraries (D2)."
+    },
+    "src/agents/function_schema.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/FunctionSchema.swift"
+      ],
+      "notes": "Decodable probing instead of inspect.signature (D6)."
+    },
+    "src/agents/guardrail.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Guardrail.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/handoffs/__init__.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Handoffs/Handoffs.swift"
+      ],
+      "notes": "Re-exports; map to the module's public surface."
+    },
+    "src/agents/handoffs/history.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/Handoffs/History.swift"
+      ],
+      "notes": "Nested-history provenance tracking not ported."
+    },
+    "src/agents/items.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Items.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/lifecycle.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Lifecycle.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/logger.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Logger.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/mcp/__init__.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Re-exports; map to the module's public surface."
+    },
+    "src/agents/mcp/_compat.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/mcp/_logging.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/mcp/manager.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/mcp/server.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/MCP/MCPServer.swift"
+      ],
+      "notes": "Protocol only; concrete servers go to AgentsMCP."
+    },
+    "src/agents/mcp/util.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/MCP/MCPUtil.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/memory/__init__.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Re-exports; map to the module's public surface."
+    },
+    "src/agents/memory/openai_conversations_session.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/memory/openai_responses_compaction_session.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/memory/session.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Memory/Session.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/memory/session_settings.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/memory/sqlite_session.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/memory/util.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/model_settings.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/ModelSettings.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/models/__init__.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Re-exports; map to the module's public surface."
+    },
+    "src/agents/models/_openai_retry.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Models/OpenAIShared.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/models/_openai_shared.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Models/OpenAIShared.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/models/_openai_websocket.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/models/_response_terminal.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Models/OpenAIShared.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/models/_retry_runtime.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/Models/RetryRuntime.swift",
+        "Sources/Agents/RunInternal/ModelRetry.swift"
+      ],
+      "notes": "Header parsing ported; attribute/__cause__ introspection replaced by typed ModelAPIError."
+    },
+    "src/agents/models/_run_context.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/models/_trace.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/models/chatcmpl_converter.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/models/chatcmpl_helpers.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/models/chatcmpl_stream_handler.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/models/default_models.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Models/DefaultModels.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/models/fake_id.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Models/DefaultModels.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/models/interface.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Models/Interface.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/models/multi_provider.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Models/MultiProvider.swift"
+      ],
+      "notes": "litellm/any-llm prefixes are out of scope."
+    },
+    "src/agents/models/openai_agent_registration.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/models/openai_chatcompletions.py": {
+      "status": "pending",
+      "swift": [
+        "Sources/Agents/Models/OpenAIChatCompletions.swift"
+      ],
+      "notes": "Shell only."
+    },
+    "src/agents/models/openai_client_utils.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/models/openai_provider.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/Models/OpenAIProvider.swift"
+      ],
+      "notes": "Websocket transport and agent registration not ported."
+    },
+    "src/agents/models/openai_responses.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/Models/OpenAIResponses.swift"
+      ],
+      "notes": "Websocket model not ported."
+    },
+    "src/agents/models/reasoning_content_replay.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/prompts.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Prompts.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/realtime/__init__.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Re-exports; map to the module's public surface."
+    },
+    "src/agents/realtime/_default_tracker.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/realtime/_tool_filtering.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/realtime/_tool_validation.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/realtime/_util.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/realtime/agent.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/realtime/audio_formats.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/realtime/config.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/realtime/events.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/realtime/handoffs.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/realtime/items.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/realtime/model.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/realtime/model_events.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/realtime/model_inputs.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/realtime/openai_realtime.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/realtime/runner.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/realtime/session.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/realtime/testing.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/repl.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Repl.swift"
+      ],
+      "notes": "Input/output closures are injectable (default stdin/stdout)."
+    },
+    "src/agents/responses_websocket_session.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/result.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/Result.swift"
+      ],
+      "notes": "release_agents and nested-history filtering not ported."
+    },
+    "src/agents/retry.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Retry.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/run.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/Run.swift"
+      ],
+      "notes": "run_sync skipped; sandbox and blocked-output replacement not ported."
+    },
+    "src/agents/run_config.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/RunConfig.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/run_context.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/RunContext.swift"
+      ],
+      "notes": "Approval candidate keys simplified; agent-scoped approval owners not ported."
+    },
+    "src/agents/run_error_handlers.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/RunErrorHandlers.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/run_internal/__init__.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Re-exports; map to the module's public surface."
+    },
+    "src/agents/run_internal/_asyncio_progress.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/run_internal/agent_bindings.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/run_internal/agent_runner_helpers.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/Run.swift",
+        "Sources/Agents/RunInternal/TurnPreparation.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/run_internal/agent_tool_configuration.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/run_internal/approvals.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/run_internal/blocked_output.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/run_internal/error_handlers.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/RunInternal/TurnPreparation.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/run_internal/guardrails.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/RunInternal/TurnPreparation.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/run_internal/items.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/RunInternal/RunInternalItems.swift"
+      ],
+      "notes": "Renamed (D10); nested-history provenance not ported."
+    },
+    "src/agents/run_internal/model_provider_lifecycle.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/run_internal/model_retry.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/RunInternal/ModelRetry.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/run_internal/oai_conversation.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/RunInternal/OAIConversation.swift"
+      ],
+      "notes": "Identity tracking via RunItem identities."
+    },
+    "src/agents/run_internal/prompt_cache_key.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/run_internal/run_grouping.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/run_internal/run_loop.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/RunInternal/RunLoop.swift",
+        "Sources/Agents/Run.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/run_internal/run_steps.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/RunInternal/RunSteps.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/run_internal/session_persistence.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/RunInternal/SessionPersistence.swift"
+      ],
+      "notes": "Pending-write checkpoints and compaction generations not ported."
+    },
+    "src/agents/run_internal/streaming.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/RunInternal/RunLoop.swift",
+        "Sources/Agents/Run.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/run_internal/tool_actions.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/RunInternal/ToolActions.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/run_internal/tool_caller.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/run_internal/tool_execution.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/RunInternal/ToolExecution.swift"
+      ],
+      "notes": "Invocation de-duplication ledger not ported."
+    },
+    "src/agents/run_internal/tool_planning.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/RunInternal/ToolExecution.swift"
+      ],
+      "notes": "Invocation de-duplication ledger not ported."
+    },
+    "src/agents/run_internal/tool_use_tracker.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/RunInternal/RunSteps.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/run_internal/turn_preparation.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/RunInternal/TurnPreparation.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/run_internal/turn_resolution.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/RunInternal/TurnResolution.swift"
+      ],
+      "notes": "PTC parent validation and blocked-output replacement not ported."
+    },
+    "src/agents/run_state.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/RunState.swift"
+      ],
+      "notes": "In-process resume only; JSON serialization pending."
+    },
+    "src/agents/sandbox/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/_mount_security.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/apply_patch.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/capabilities/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/capabilities/capabilities.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/capabilities/capability.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/capabilities/compaction.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/capabilities/filesystem.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/capabilities/memory.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/capabilities/shell.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/capabilities/skills.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/capabilities/tools/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/capabilities/tools/apply_patch_tool.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/capabilities/tools/shell_tool.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/capabilities/tools/view_image.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/config.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/entries/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/entries/artifacts.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/entries/base.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/entries/mounts/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/entries/mounts/_redaction.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/entries/mounts/base.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/entries/mounts/patterns.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/entries/mounts/providers/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/entries/mounts/providers/azure_blob.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/entries/mounts/providers/base.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/entries/mounts/providers/box.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/entries/mounts/providers/gcs.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/entries/mounts/providers/r2.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/entries/mounts/providers/s3.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/entries/mounts/providers/s3_files.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/errors.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/files.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/manifest.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/manifest_render.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/materialization.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/memory/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/memory/interface.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/memory/manager.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/memory/phase_one.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/memory/phase_two.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/memory/prompts.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/memory/rollouts.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/memory/storage.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/remote_mount_policy.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/runtime.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/runtime_agent_preparation.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/runtime_session_manager.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/sandbox_agent.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/sandboxes/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/sandboxes/_docker_removal_worker.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/sandboxes/_unix_local_file_ops.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/sandboxes/_unix_local_files.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/sandboxes/docker.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/sandboxes/docker_removal.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/sandboxes/unix_local.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/archive_extraction.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/archive_ops.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/base_sandbox_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/bounded_read.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/dependencies.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/events.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/manager.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/manifest_application.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/manifest_ops.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/mount_lifecycle.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/pty_output.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/pty_types.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/runtime_helpers.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/sandbox_client.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/sandbox_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/sandbox_session_state.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/sinks.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/snapshot_lifecycle.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/tar_workspace.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/utils.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/session/workspace_payloads.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/snapshot.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/snapshot_defaults.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/types.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/util/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/util/blocking_io.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/util/checksums.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/util/deep_merge.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/util/github.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/util/iterator_io.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/util/parse_utils.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/util/retry.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/util/tar_utils.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/util/token_truncation.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/sandbox/workspace_paths.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/stream_events.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/StreamEvents.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/strict_schema.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/StrictSchema.swift"
+      ],
+      "notes": "Deep schemas convert on a large stack (D9)."
+    },
+    "src/agents/testing/__init__.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Re-exports; map to the module's public surface."
+    },
+    "src/agents/testing/model.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/AgentsTesting/ScriptedModel.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/testing/sandbox.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "src/agents/tool.py": {
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/Tool.swift",
+        "Sources/Agents/FunctionSchema.swift"
+      ],
+      "notes": "Decorator/signature introspection replaced by Decodable schemas (D6)."
+    },
+    "src/agents/tool_context.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/ToolContext.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/tool_guardrails.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/ToolGuardrails.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/tracing/__init__.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Tracing/Create.swift"
+      ],
+      "notes": "Re-exports; map to the module's public surface."
+    },
+    "src/agents/tracing/config.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/tracing/context.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/tracing/create.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Tracing/Create.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/tracing/logger.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/tracing/model_tracing.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/tracing/processor_interface.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Tracing/Provider.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/tracing/processors.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Tracing/Processors.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/tracing/provider.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Tracing/Provider.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/tracing/scope.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Tracing/Provider.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/tracing/setup.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Tracing/Provider.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/tracing/span_data.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Tracing/SpanData.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/tracing/spans.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Tracing/Spans.swift"
+      ],
+      "notes": "Scoped current spans (D8)."
+    },
+    "src/agents/tracing/traces.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Tracing/Traces.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/tracing/util.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Tracing/Provider.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/usage.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Usage.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/util/__init__.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Re-exports; map to the module's public surface."
+    },
+    "src/agents/util/_approvals.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/util/_asyncio_tasks.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/util/_coro.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/util/_custom_data.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/util/_error_tracing.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Tracing/Create.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/util/_json.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/util/_pretty_print.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Result.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/util/_tool_errors.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/util/_transforms.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Util/Transforms.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/util/_types.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/version.py": {
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Version.swift"
+      ],
+      "notes": ""
+    },
+    "src/agents/voice/__init__.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Re-exports; map to the module's public surface."
+    },
+    "src/agents/voice/events.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/voice/exceptions.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/voice/imports.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Python optional-dependency import guard."
+    },
+    "src/agents/voice/input.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/voice/model.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/voice/models/__init__.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Re-exports; map to the module's public surface."
+    },
+    "src/agents/voice/models/openai_model_provider.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/voice/models/openai_stt.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/voice/models/openai_tts.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/voice/pipeline.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/voice/pipeline_config.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/voice/result.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/voice/testing.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/voice/utils.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "src/agents/voice/workflow.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/__init__.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Package marker only."
+    },
+    "tests/_fake_workspace_paths.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/conftest.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Support/TestingProcessor.swift",
+        "Makefile"
+      ],
+      "notes": "Global fixtures become the .tracing trait and Makefile test env."
+    },
+    "tests/docs/test_translate_docs.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Python docs tooling."
+    },
+    "tests/extensions/experiemental/codex/test_codex_exec_thread.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/experiemental/codex/test_codex_tool.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/experiemental/codex/test_payloads.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/experimental/hosted_multi_agent/test_live.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/experimental/hosted_multi_agent/test_model.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/memory/test_advanced_sqlite_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/memory/test_async_sqlite_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/memory/test_dapr_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/memory/test_encrypt_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/memory/test_memory_imports.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/memory/test_mongodb_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/memory/test_redis_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/memory/test_sqlalchemy_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/sandbox/test_blaxel.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/sandbox/test_blaxel_mounts.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/sandbox/test_cloudflare.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/sandbox/test_daytona.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/sandbox/test_e2b.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/sandbox/test_modal.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/sandbox/test_rclone.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/sandbox/test_runloop.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/sandbox/test_runloop_capabilities_example.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/sandbox/test_runloop_mounts.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/sandbox/test_vercel.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/sandbox/test_vercel_provider_contract.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/extensions/test_tool_output_trimmer.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Extensions are out of scope (D2)."
+    },
+    "tests/fastapi/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "FastAPI integration example."
+    },
+    "tests/fastapi/streaming_app.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "FastAPI integration example."
+    },
+    "tests/fastapi/test_streaming_context.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "FastAPI integration example."
+    },
+    "tests/fixtures/released_api_contract.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/released_api_contract_policy.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/README.md": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/features/v1_10_unlimited_max_turns.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/features/v1_11_tool_output_custom_data.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/features/v1_12_input_cache_write_usage.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/features/v1_13_nested_history_ownership.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/features/v1_13_programmatic_tool_calling.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/features/v1_14_hosted_mcp_approval_scope.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/features/v1_15_canonical_invocation_identity.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/features/v1_16_per_call_approval_override.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/features/v1_17_docker_labels.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/features/v1_2_reasoning_item_id_policy.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/features/v1_3_resumed_trace_state.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/features/v1_4_request_id.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/features/v1_5_tool_search_and_display_metadata.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/features/v1_6_approval_rejection_message.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/features/v1_7_duplicate_agent_identity_and_sandbox.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/features/v1_8_prompt_cache_key.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/features/v1_9_custom_tool_call_and_tool_origin.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/generate_corpus.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_0.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_1.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_10.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_11.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_12.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_13.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_14.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_15.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_16.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_17.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_2.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_3.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_4.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_5.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_6.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_7.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_8.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/minimal/v1_9.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/negative/future_version.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/negative/malformed_current_agent.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/negative/missing_version.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/resume/v1_13_pending_tool_approval.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/security/v1_13_legacy_mount_credentials.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/fixtures/run_state/sources.json": {
+      "status": "pending",
+      "swift": [],
+      "notes": "Fixtures consumed by ported tests."
+    },
+    "tests/mcp/__init__.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Package marker only."
+    },
+    "tests/mcp/helpers.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/model_compat.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/servers/legacy.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/servers/paginated.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_caching.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_client_session_retries.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_connect_disconnect.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_list_page_limits.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_mcp_approval.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_mcp_auth_params.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_mcp_imports.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_mcp_pagination_integration.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_mcp_resources.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_mcp_resume_binding.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_mcp_server_manager.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_mcp_server_manager_cleanup_state.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_mcp_tracing.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_mcp_util.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_mcp_v2_http.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_mcp_version_compat.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_message_handler.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_prompt_server.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_runner_calls_mcp.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_server_errors.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_streamable_http_client_factory.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_streamable_http_session_id.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/mcp/test_tool_filtering.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/memory/test_compaction_model_visibility.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/memory/test_compaction_suffix.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/memory/test_openai_conversations_session.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/memory/test_openai_responses_compaction_session.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/memory/test_session.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/memory/test_session_context_wrapper.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/memory/test_session_limit.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/memory/test_session_persistence_sanitize.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/memory/test_sqlalchemy_compaction.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "SQLAlchemy extension."
+    },
+    "tests/model_settings/test_serialization.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/model_test_helpers.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Support/ModelTestHelpers.swift"
+      ],
+      "notes": ""
+    },
+    "tests/models/__init__.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Package marker only."
+    },
+    "tests/models/test_agent_registration.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/models/test_anthropic_thinking_blocks.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/models/test_any_llm_model.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "any-llm extension."
+    },
+    "tests/models/test_chatcompletions_stream_eof.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/models/test_deepseek_reasoning_content.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/models/test_default_models.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Models/DefaultModelsTests.swift"
+      ],
+      "notes": ""
+    },
+    "tests/models/test_extended_thinking_message_order.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/models/test_gemini_thought_signatures.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/models/test_gemini_thought_signatures_stream.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/models/test_generation_metadata.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/models/test_kwargs_functionality.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/models/test_litellm_chatcompletions_stream.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "LiteLLM extension."
+    },
+    "tests/models/test_litellm_content_filter.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "LiteLLM extension."
+    },
+    "tests/models/test_litellm_extra_body.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "LiteLLM extension."
+    },
+    "tests/models/test_litellm_logging_patch.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "LiteLLM extension."
+    },
+    "tests/models/test_litellm_logprobs.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "LiteLLM extension."
+    },
+    "tests/models/test_litellm_usage_requests.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "LiteLLM extension."
+    },
+    "tests/models/test_litellm_user_agent.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "LiteLLM extension."
+    },
+    "tests/models/test_map.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Models/MapTests.swift"
+      ],
+      "notes": "litellm/any-llm (D2), websocket, and invalid prefix-mode tests skipped."
+    },
+    "tests/models/test_model_payload_iterators.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/models/test_model_retry.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Models/ModelRetryTests.swift",
+        "Tests/AgentsTests/Models/ModelRetryTests+Streaming.swift",
+        "Tests/AgentsTests/Models/ModelRetryTests+ReplaySafety.swift"
+      ],
+      "notes": "Skipped: traceback/frame-local hygiene, second-cancellation cleanup timing, contextvars scoping, provider-iterator aclose bookkeeping, falsey policy attributes, websocket transport. Provider-advice mutation tests adapted (value types)."
+    },
+    "tests/models/test_openai_chatcompletions.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/models/test_openai_chatcompletions_converter.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/models/test_openai_chatcompletions_stream.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/models/test_openai_client_utils.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/models/test_openai_responses.py": {
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/Models/OpenAIResponsesTests.swift",
+        "Tests/AgentsTests/Models/OpenAIResponsesTests+PromptAndUsage.swift"
+      ],
+      "notes": "HTTP-path tests ported via HTTPStub. Pending: websocket transport tests. Skipped: openai-python stream context-manager/aclose mechanics, dataclass mutability, dict ModelSettings."
+    },
+    "tests/models/test_openai_responses_converter.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Models/OpenAIResponsesConverterTests.swift"
+      ],
+      "notes": "Type-impossible cases skipped (non-int max_num_results, pydantic filter models, positional WebSearchTool args, __all__ export)."
+    },
+    "tests/models/test_openai_retry_helpers.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Models/OpenAIRetryHelpersTests.swift"
+      ],
+      "notes": "Attribute/__cause__ introspection and websocket unsafe_to_replay tests skipped."
+    },
+    "tests/models/test_reasoning_content.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/models/test_reasoning_content_replay_hook.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/models/test_remove_openai_responses_api_incompatible_fields.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Models/RemoveOpenAIResponsesAPIIncompatibleFieldsTests.swift"
+      ],
+      "notes": ""
+    },
+    "tests/models/test_responses_websocket_session.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/models/test_trace_config.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/__init__.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Package marker only."
+    },
+    "tests/realtime/session_test_support.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_agent.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_app_server_debug.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Exercises Python example applications."
+    },
+    "tests/realtime/test_app_server_security.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Exercises Python example applications."
+    },
+    "tests/realtime/test_audio_formats_unit.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_conversion_helpers.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_ga_session_update_normalization.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_item_parsing.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_model_events.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_openai_realtime.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_openai_realtime_conversions.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_openai_realtime_sip_model.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_playback_tracker.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_playback_tracker_manual_unit.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_realtime_handoffs.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_realtime_model_settings.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_runner.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_session.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_session_approvals.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_session_close_iteration.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_session_exceptions.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_session_guardrails.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_session_history.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_session_payload_and_formats.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_session_tool_error_events.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_session_tool_output_guardrails.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_session_tool_outputs.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_testing.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_tracing.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/realtime/test_twilio_example.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Exercises Python example applications."
+    },
+    "tests/realtime/test_twilio_sip_server.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Exercises Python example applications."
+    },
+    "tests/realtime/test_websocket_message_size.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/sandbox/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/_apply_patch_test_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/_docker_removal_helpers.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/_filesystem_test_session.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/capabilities/test_apply_patch_preflight.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/capabilities/test_apply_patch_tool.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/capabilities/test_compaction_capability.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/capabilities/test_filesystem_capability.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/capabilities/test_shell_capability.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/capabilities/test_skills_capability.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/capabilities/test_view_image_tool.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/integration_tests/__init__.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/integration_tests/_helpers.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/integration_tests/test_model.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/integration_tests/test_runner_pause_resume.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_apply_patch.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_bounded_read.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_client_options.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_compaction.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_compatibility_guards.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_dependencies.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_docker.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_docker_network_mode.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_docker_removal.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_docker_removal_client.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_docker_removal_worker.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_entries.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_errors.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_exposed_ports.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_extract.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_manifest.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_manifest_application.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_manifest_config.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_materialization.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_memory.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_mount_lifecycle.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_mount_security.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_mounts.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_parse_utils.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_posix_tool_paths.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_pty_output.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_pty_types.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_recursive_removal_compatibility.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_remote_mount_policy.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_retry.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_run_cwd.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_runtime.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_runtime_agent_preparation.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_runtime_helpers.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_sandboxes_import.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_session_manager.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_session_sinks.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_session_state_roundtrip.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_session_utils.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_snapshot.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_snapshot_defaults.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_tar_utils.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_tar_workspace.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_token_truncation.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_types.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_unix_local.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_unix_local_create.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_unix_local_file_io.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_unix_local_special_files.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_unix_local_user_file_io.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_view_image_content_validation.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_workspace_jsonl_sink.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_workspace_paths.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/sandbox/test_workspace_payloads.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/test_agent_as_tool.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_agent_as_tool_callback_validation.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_agent_as_tool_output_guardrails.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_agent_clone_shallow_copy.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/AgentCloneShallowCopyTests.swift"
+      ],
+      "notes": "Array identity/shared-mutation checks skipped (value-type arrays)."
+    },
+    "tests/test_agent_config.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/AgentConfigTests.swift"
+      ],
+      "notes": "Runtime type-validation tests skipped (compiler-enforced)."
+    },
+    "tests/test_agent_hooks.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/AgentHooksTests.swift"
+      ],
+      "notes": "Falsy-hooks test adapted (no truthiness); streamed/non-streamed variants parameterized."
+    },
+    "tests/test_agent_instructions_signature.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_agent_llm_hooks.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/AgentLLMHooksTests.swift",
+        "Tests/AgentsTests/Support/HookRecorders.swift"
+      ],
+      "notes": "run_sync variant skipped (no Runner.run_sync)."
+    },
+    "tests/test_agent_memory_leak.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/AgentMemoryLeakTests.swift"
+      ],
+      "notes": ""
+    },
+    "tests/test_agent_prompt.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_agent_runner.py": {
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/AgentRunnerTests.swift",
+        "Tests/AgentsTests/AgentRunnerTests+Sessions.swift",
+        "Tests/AgentsTests/AgentRunnerTests+Conversations.swift",
+        "Tests/AgentsTests/AgentRunnerTests+Turns.swift",
+        "Tests/AgentsTests/AgentRunnerTests+Collisions.swift",
+        "Tests/AgentsTests/AgentRunnerTests+Utilities.swift"
+      ],
+      "notes": "Blocked-output, sandbox, SQLite/OpenAI conversation sessions, RunState serialization, and execute_approved_tools cases pending/skipped."
+    },
+    "tests/test_agent_runner_streamed.py": {
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/AgentRunnerStreamedTests.swift",
+        "Tests/AgentsTests/AgentRunnerStreamedTests+Guardrails.swift",
+        "Tests/AgentsTests/AgentRunnerStreamedTests+Resume.swift"
+      ],
+      "notes": "Blocked-output, ws, serialized-state, and terminal-behavior deferral cases pending."
+    },
+    "tests/test_agent_runner_sync.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_agent_scoped_approvals.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_agent_tool_enablement_snapshot.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_agent_tool_input.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_agent_tool_state.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_agent_tracing.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_agents_logging.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_apply_diff.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ApplyDiffTests.swift"
+      ],
+      "notes": ""
+    },
+    "tests/test_apply_diff_helpers.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ApplyDiffHelpersTests.swift"
+      ],
+      "notes": ""
+    },
+    "tests/test_apply_patch_tool.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_asyncio_progress.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Python asyncio helper internals."
+    },
+    "tests/test_asyncio_stability_command.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Python asyncio helper internals."
+    },
+    "tests/test_asyncio_tasks.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Python asyncio helper internals."
+    },
+    "tests/test_call_model_input_filter.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/CallModelInputFilterTests.swift"
+      ],
+      "notes": "Invalid return type test skipped (typed filter); streamed variants parameterized."
+    },
+    "tests/test_call_model_input_filter_unit.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/CallModelInputFilterUnitTests.swift"
+      ],
+      "notes": "Invalid return type test skipped (typed filter)."
+    },
+    "tests/test_cancel_streaming.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_change_detection.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_check_optional_truthiness.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_code_change_verification_policy.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Python repository agent skills."
+    },
+    "tests/test_code_change_verification_runner.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Python repository agent skills."
+    },
+    "tests/test_computer_action.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_computer_tool_lifecycle.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_config.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_custom_tool.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/CustomToolTests.swift"
+      ],
+      "notes": ""
+    },
+    "tests/test_dapr_session_example.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Exercises Python example applications."
+    },
+    "tests/test_daytona_usaspending_example.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Exercises Python example applications."
+    },
+    "tests/test_debug.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/DebugTests.swift"
+      ],
+      "notes": "Environment passed explicitly instead of patching os.environ."
+    },
+    "tests/test_decorators.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Python module/decorator identities; Swift has factory functions instead of decorators."
+    },
+    "tests/test_default_tool_error_redaction.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_disabled_trace_provider_flush.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/DisabledTraceProviderTests.swift"
+      ],
+      "notes": "Merged into one suite; flush calls provider.forceFlush() instead of monkeypatching the global provider."
+    },
+    "tests/test_disabled_trace_provider_shutdown.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/DisabledTraceProviderTests.swift"
+      ],
+      "notes": "Merged into one suite; flush calls provider.forceFlush() instead of monkeypatching the global provider."
+    },
+    "tests/test_doc_parsing.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_error_logging_redaction.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_example_workflows.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Exercises Python example applications."
+    },
+    "tests/test_exception_exports.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Python package re-exports and monkeypatched pretty printer; Swift exceptions are module-level types."
+    },
+    "tests/test_extension_filters.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_extra_headers.py": {
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/ExtraHeadersTests.swift",
+        "Tests/AgentsTests/Support/HTTPStub.swift"
+      ],
+      "notes": "Responses case ported via HTTPStub; Chat Completions case pending the Chat Completions port."
+    },
+    "tests/test_financial_research_budget.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Exercises Python example applications."
+    },
+    "tests/test_function_schema.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_function_schema_logger_restore.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "griffe logger suppression; Swift has no docstring parser (D6)."
+    },
+    "tests/test_function_tool.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/FunctionToolTests.swift"
+      ],
+      "notes": "Skipped: to_thread/event-loop, pydantic Field/kwargs, monkeypatch/deepcopy/dataclasses.replace private fields, FunctionTool subclasses (final class), runtime type checks for timeout config. JSON Schema validator assertions replaced by schema-shape assertions."
+    },
+    "tests/test_function_tool_approval_arguments.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_function_tool_decorator.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_global_hooks.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/GlobalHooksTests.swift"
+      ],
+      "notes": "Four scenarios parameterized over streamed/structured."
+    },
+    "tests/test_guardrails.py": {
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/GuardrailsTests.swift"
+      ],
+      "notes": "run_sync and private-task cases skipped."
+    },
+    "tests/test_handoff_history_duplication.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_handoff_prompt.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/HandoffPromptTests.swift"
+      ],
+      "notes": ""
+    },
+    "tests/test_handoff_tool.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/HandoffToolTests.swift"
+      ],
+      "notes": "Type-enforced validation and pydantic lenient-mode cases skipped."
+    },
+    "tests/test_hitl_error_scenarios.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_hitl_session_scenario.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_hitl_utils.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/HITLUtilsTests.swift",
+        "Tests/AgentsTests/Utils/HITL.swift"
+      ],
+      "notes": ""
+    },
+    "tests/test_hosted_mcp_connectors_example.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Exercises Python example applications."
+    },
+    "tests/test_human_in_the_loop_server_example.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Exercises Python example applications."
+    },
+    "tests/test_image_generation_tool_reference.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "griffe docs introspection of Python source."
+    },
+    "tests/test_image_generation_tool_typing.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_integration_runner.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_invalid_final_output_handler.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_items_helpers.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ItemsHelpersTests.swift"
+      ],
+      "notes": "Agent release/weakref, pydantic validation, and deep-copy mutation tests skipped (strong refs, value-type JSON)."
+    },
+    "tests/test_live_example.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Exercises Python example applications."
+    },
+    "tests/test_local_shell_tool.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_logprobs.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_max_turns.py": {
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/MaxTurnsTests.swift"
+      ],
+      "notes": "SQLiteSession and RunState serialization cases pending."
+    },
+    "tests/test_mcp_tool_metadata.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_model_error_logging_redaction.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Swift Span.setError cannot throw, so the failing-annotation path does not exist."
+    },
+    "tests/test_oaiconv_resume_response_id.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/OAIConversationResumeResponseIdTests.swift"
+      ],
+      "notes": ""
+    },
+    "tests/test_openai_provider_client_options.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/OpenAIProviderClientOptionsTests.swift"
+      ],
+      "notes": "Websocket and empty base_url cases skipped (no websocket transport; baseURL is URL)."
+    },
+    "tests/test_output_guardrail_cancellation.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/OutputGuardrailCancellationTests.swift"
+      ],
+      "notes": ""
+    },
+    "tests/test_output_tool.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_pretty_print.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_process_model_response.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_programmatic_tool_calling.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_prompt_cache_key.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_provider_span_errors.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_redis_session_example.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Exercises Python example applications."
+    },
+    "tests/test_release_automation.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Python release automation."
+    },
+    "tests/test_release_please.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Python release automation."
+    },
+    "tests/test_release_provenance.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Python release automation."
+    },
+    "tests/test_released_api_contract.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Python released-API manifest."
+    },
+    "tests/test_repl.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ReplTests.swift"
+      ],
+      "notes": ""
+    },
+    "tests/test_repository_workflow_interfaces.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Python repository CI workflows."
+    },
+    "tests/test_responses.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Support/TestResponses.swift"
+      ],
+      "notes": ""
+    },
+    "tests/test_responses_tracing.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_result_cast.py": {
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/ResultCastTests.swift"
+      ],
+      "notes": "release_agents/weakref cases skipped."
+    },
+    "tests/test_resume_tool_use_behavior.py": {
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/ResumeToolUseBehaviorTests.swift"
+      ],
+      "notes": "serialized=True cases pending RunState.to_string/from_string."
+    },
+    "tests/test_run.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/RunTests.swift"
+      ],
+      "notes": "run_sync skipped; counting AgentRunner subclass replaces mock."
+    },
+    "tests/test_run_config.py": {
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/RunConfigTests.swift"
+      ],
+      "notes": "Sandbox and dict-only cases skipped."
+    },
+    "tests/test_run_context_approvals.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_run_context_wrapper.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/RunContextWrapperTests.swift"
+      ],
+      "notes": "_to_str_or_none skipped (Swift string conversion cannot raise)."
+    },
+    "tests/test_run_error_details.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/RunErrorDetailsTests.swift"
+      ],
+      "notes": ""
+    },
+    "tests/test_run_examples_script.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Python examples runner script."
+    },
+    "tests/test_run_hooks.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/RunHooksTests.swift"
+      ],
+      "notes": "run_sync and non-RunHooks rejection tests skipped (hooks parameter is typed)."
+    },
+    "tests/test_run_impl_resume_paths.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_run_internal_approvals.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_run_internal_error_handlers.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_run_internal_items.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_run_serial_tests.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "pytest serial runner."
+    },
+    "tests/test_run_state.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_run_state_agent_identity.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_run_state_compatibility_corpus.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_run_state_pending_input.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_run_step_execution.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_run_step_processing.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_runner_guardrail_resume.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_runner_model_provider_lifecycle.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_runtime_symmetry_contract.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_scripted_model.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_scripted_sandbox.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox runtime is out of scope (D2)."
+    },
+    "tests/test_server_conversation_tracker.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_shell_call_serialization.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_shell_examples.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Exercises Python example applications."
+    },
+    "tests/test_shell_tool.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_soft_cancel.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_source_compat_constructors.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_start_hook_tool_concurrency.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_start_hook_tools.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_stream_events.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_stream_input_guardrail_timing.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_streamed_terminal_output_backfill.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_streaming_logging.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Python logging extras (generated_items_details); Swift resume does not log generated items."
+    },
+    "tests/test_streaming_tool_call_arguments.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_strict_schema.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/StrictSchemaTests.swift"
+      ],
+      "notes": ""
+    },
+    "tests/test_strict_schema_oneof.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_test_environment.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "pytest environment checks."
+    },
+    "tests/test_tool_approval_call_id_reuse.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_tool_choice_reset.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ToolChoiceResetTests.swift"
+      ],
+      "notes": ""
+    },
+    "tests/test_tool_context.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ToolContextTests.swift"
+      ],
+      "notes": "Hashability, missing-init-field, dict run_config, and annotation-driven plain-context tests skipped."
+    },
+    "tests/test_tool_converter.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_tool_custom_data.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_tool_guardrails.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ToolGuardrailsTests.swift"
+      ],
+      "notes": "Sync/async variants merged (Swift guardrails are async); invalid-function and default-name decorator checks skipped."
+    },
+    "tests/test_tool_identity.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_tool_metadata.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ToolMetadataTests.swift"
+      ],
+      "notes": ""
+    },
+    "tests/test_tool_name_collision_policy.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_tool_origin.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_tool_output_conversion.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_tool_use_behavior.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/ToolUseBehaviorTests.swift"
+      ],
+      "notes": "Invalid enum/return cases skipped."
+    },
+    "tests/test_tool_use_tracker.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_trace_processor.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_trace_redaction_example.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Exercises Python example applications."
+    },
+    "tests/test_tracing.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_tracing_errors.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_tracing_errors_streamed.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/test_tracing_provider_safe_debug.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Python logging handler stream state."
+    },
+    "tests/test_transforms.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/TransformsTests.swift"
+      ],
+      "notes": ""
+    },
+    "tests/test_update_rclone_pin.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Sandbox tooling."
+    },
+    "tests/test_usage.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/UsageTests.swift"
+      ],
+      "notes": ""
+    },
+    "tests/test_usaspending_setup_db.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Exercises Python example applications."
+    },
+    "tests/test_visualization.py": {
+      "status": "out_of_scope",
+      "swift": [],
+      "notes": "Graphviz visualization extension."
+    },
+    "tests/testing_processor.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Support/TestingProcessor.swift"
+      ],
+      "notes": ""
+    },
+    "tests/tracing/test_import_side_effects.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/tracing/test_logger.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/tracing/test_processor_api_key.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/tracing/test_reasoning_export.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/tracing/test_set_api_key_fix.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/tracing/test_setup.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/tracing/test_span_ordering.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/tracing/test_spans_impl.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/tracing/test_trace_context.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/tracing/test_traces_impl.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/tracing/test_tracing_env_disable.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/utils/factories.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/utils/hitl.py": {
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/Utils/HITL.swift"
+      ],
+      "notes": ""
+    },
+    "tests/utils/simple_session.py": {
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Utils/SimpleSession.swift"
+      ],
+      "notes": ""
+    },
+    "tests/utils/test_json.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/utils/test_pretty_print_and_items.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/utils/test_simple_session.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/voice/__init__.py": {
+      "status": "skipped",
+      "swift": [],
+      "notes": "Package marker only."
+    },
+    "tests/voice/helpers.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/voice/pipeline_test_models.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/voice/test_input.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/voice/test_openai_model_provider.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/voice/test_openai_stt.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/voice/test_openai_stt_api_key_refresh.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/voice/test_openai_stt_client_config.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/voice/test_openai_stt_eof.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/voice/test_openai_stt_session_config.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/voice/test_openai_tts.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/voice/test_pipeline.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/voice/test_pipeline_config.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/voice/test_pipeline_tracing.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/voice/test_testing.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/voice/test_tts_voice_types.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/voice/test_utils.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    },
+    "tests/voice/test_workflow.py": {
+      "status": "pending",
+      "swift": [],
+      "notes": ""
+    }
+  }
+}

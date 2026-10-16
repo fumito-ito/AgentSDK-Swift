@@ -13,6 +13,7 @@ Swift-specific deviations from openai-agents-python. Each entry records what dif
 - **Decision:** `agents.sandbox`, `agents.extensions`, and modules that only adapt third-party Python libraries are not ported.
 - **Why:** They wrap Python-only ecosystems (Docker/E2B/Modal sandboxes, LiteLLM, SQLAlchemy, Redis clients) with no Swift counterpart worth maintaining.
 - **Apply:** Record these files as `out_of_scope` in `porting/manifest.json`. Core code paths that reference them (for example sandbox agent preparation) are omitted, and the omission is noted at the call site.
+- **Exception:** `agents.extensions.handoff_prompt` and `agents.extensions.handoff_filters` are pure SDK code with no third-party dependency, so they are ported into `Sources/Agents/Extensions/`.
 
 ## D3. No third-party OpenAI SDK; JSON-backed wire types
 
@@ -41,3 +42,33 @@ Swift-specific deviations from openai-agents-python. Each entry records what dif
 - **Decision:** Upstream builds JSON schemas from Python function signatures and docstrings. Swift has no runtime signature reflection, so function tools take a `Decodable` argument type whose schema is derived from its `Decodable` conformance (or supplied explicitly). `strict_schema.py` is ported as-is because it operates on JSON.
 - **Why:** This is the closest Swift equivalent that keeps schema and decoding in one source of truth.
 - **Apply:** Upstream tests for docstring parsing and `inspect.signature` handling are `skipped`.
+
+## D8. Current spans and traces are scoped, not set and reset
+
+- **Decision:** `Scope.currentSpan` / `Scope.currentTrace` are `@TaskLocal` values. Spans and traces become current through scoped APIs (`span.withCurrent { }`, `span.run { }`, `trace.run { }`) instead of upstream's `start(mark_as_current=True)` / `finish(reset_current=True)` pairs. Long-lived spans (the runner's task and agent spans) are started and finished explicitly, and each unit of work runs inside `withCurrent`.
+- **Why:** Swift task-locals can only be bound for the duration of a closure. Scoped binding also makes it impossible to leak a current span past its owner, which upstream guards against with tokens.
+- **Apply:** When porting code that marks a span current, wrap the code that should observe it in `withCurrent`. Child tasks inherit the binding automatically; code that crosses into unstructured tasks must capture and rebind it.
+
+## D9. Deeply recursive JSON processing runs on a large stack
+
+- **Decision:** `ensureStrictJSONSchema` converts schemas that are nested more than a few levels, or that use `$defs`/`definitions`, on a dedicated thread with a 64 MiB stack (`runOnLargeStack`). Tests that build 1,000-level fixtures also run on a large stack.
+- **Why:** Upstream relies on Python's recursion limit. Swift concurrency threads have 512 KiB stacks, and nested `JSONValue` trees are released recursively, so schemas inside upstream's limits (depth 100) overflowed the stack.
+- **Apply:** Use `runOnLargeStack` for other recursive JSON walkers that accept untrusted depth.
+
+## D10. Swift file names are unique per target
+
+- **Decision:** When two upstream modules share a basename within one Swift target, the nested one gets a prefixed name: `run_internal/items.py` → `RunInternal/RunInternalItems.swift`.
+- **Why:** Swift Package Manager rejects two sources with the same basename in one target.
+
+## D11. Session input callbacks are matched by content
+
+- **Decision:** After a `sessionInputCallback` combines history and new input, the runner decides which returned items are new (and must be persisted) by content: each returned item first consumes a matching history occurrence, then a matching new-input occurrence; anything else is new.
+- **Why:** Upstream matches by object identity first, including items the callback mutated in place inside the history list it received. Swift session items are values, so identity and in-place mutation are not observable.
+- **Apply:** Upstream tests that depend on identity (repeated equal history objects, history items moved into the new-input list, in-place history replacement) are skipped.
+
+## D12. Settings validation happens when the runner consumes settings
+
+- **Decision:** `ModelSettings` and `ModelRetryBackoffSettings` keep non-throwing initializers. Values upstream's pydantic validators reject at construction (non-positive or non-finite `timeout`, negative backoff values) are rejected by `ModelSettings.validate()`, which the runner calls on the resolved settings before each model request. Settings decoded from JSON are validated while decoding.
+- **Why:** Throwing initializers would force `try` on every settings literal, including the many call sites that pass only valid constants. Validating the resolved settings still fails the run before any model call, and it also guards the timeout arithmetic against infinite or NaN values.
+- **Apply:** Ported validation tests construct the settings, then assert that `validate()` (or a run using them) throws `ValueError` with the upstream message.
+
