@@ -19,13 +19,18 @@ jobs:
     # SwiftLint on Linux loads SourceKit from the Swift toolchain in this image.
     container: swift:6.3
     steps:
+      # mise-action needs curl to download mise, and the swift image has none.
+      - name: Install curl
+        run: apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           install_args: swiftlint
-      # The swift image has no make, so this mirrors `make lint`.
+      # Mirrors `make lint`, which the swift image cannot run (no make). The
+      # swiftlint shim is used instead of `mise exec --`, which would also try
+      # to install every other tool in mise.toml without a GitHub token.
       - name: Lint
-        run: mise exec -- swiftlint lint --strict --quiet
+        run: swiftlint lint --strict --quiet
 
   macos:
     runs-on: macos-latest
