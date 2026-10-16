@@ -25,7 +25,8 @@ public func runDemoLoop(
     },
     write: (String) -> Void = { text in
         print(text, terminator: "")
-        fflush(stdout)
+        // Flush every stream: the global `stdout` is not concurrency-safe under Swift 6 on Linux.
+        fflush(nil)
     }
 ) async throws {
     var currentAgent = agent

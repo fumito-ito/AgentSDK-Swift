@@ -185,8 +185,11 @@ public final class OpenAIClient: @unchecked Sendable {
             let task = session.dataTask(with: request) { data, response, error in
                 if let error {
                     continuation.resume(throwing: error)
+                } else if let response {
+                    continuation.resume(returning: (data ?? Data(), response))
                 } else {
-                    continuation.resume(returning: (data ?? Data(), response ?? URLResponse()))
+                    // swift-corelibs-foundation has no `URLResponse()`, so a missing response is an error.
+                    continuation.resume(throwing: URLError(.badServerResponse))
                 }
             }
             task.resume()

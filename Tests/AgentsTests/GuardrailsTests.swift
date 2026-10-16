@@ -242,7 +242,9 @@ import AgentsTesting
             modelStarted.set()
             defer { modelFinished.set() }
             do {
-                try await sleep(seconds: 0.02)
+                // Swift: upstream sleeps 0.02s. Under a loaded parallel test run the tripwire can
+                // take longer than that to cancel the model, so the model would finish first.
+                try await sleep(seconds: 5)
                 return try await base.getResponse(request)
             } catch is CancellationError {
                 modelCancelled.set()
