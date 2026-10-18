@@ -575,7 +575,7 @@ private func protectedTool(calls: SharedBox<[String]>) throws -> FunctionTool {
         #expect(output as? String == "Done")
         #expect(calls.value == ["Paris", "Rome"])
         let sentCounts = model.calls.suffix(2).map { call in
-            (call.input.inputItems ?? []).filter { messageText($0) == "Late input" }.count
+            call.input.inputItems.filter { messageText($0) == "Late input" }.count
         }
         #expect(sentCounts == [1, 1])
         #expect(state.pendingInput.isEmpty)

@@ -50,7 +50,7 @@ func resolveApprovalStatus(
     onApproval: (@Sendable (RunContextWrapper, ToolApprovalItem) async throws -> ToolOnApprovalResult)?
 ) async throws -> (Bool?, ToolApprovalItem) {
     let item = ToolApprovalItem(agent: agent, rawItem: rawItem, toolName: toolName)
-    var status = try contextWrapper.getApprovalStatus(toolName: toolName, callId: callId, existingPending: item)
+    var status = try contextWrapper.getApprovalStatus(toolName: toolName, callId: callId, existingPending: item, currentInvocation: item)
     if status == nil, let onApproval {
         let decision = try await onApproval(contextWrapper, item)
         if decision.approve {
@@ -59,7 +59,7 @@ func resolveApprovalStatus(
             let reason = (decision.reason?.isEmpty ?? true) ? nil : decision.reason
             try contextWrapper.rejectTool(item, rejectionMessage: reason)
         }
-        status = try contextWrapper.getApprovalStatus(toolName: toolName, callId: callId, existingPending: item)
+        status = try contextWrapper.getApprovalStatus(toolName: toolName, callId: callId, existingPending: item, currentInvocation: item)
     }
     return (status, item)
 }
@@ -71,10 +71,11 @@ func resolveApprovalRejectionMessage(
     toolType: String,
     toolName: String,
     callId: String,
+    toolCall: JSONObject? = nil,
     toolNamespace: String? = nil,
     toolLookupKey: FunctionToolLookupKey? = nil,
     existingPending: ToolApprovalItem? = nil
-) async -> String {
+) async throws -> String {
     if let explicit = contextWrapper.getRejectionMessage(
         toolName: toolName, callId: callId, toolNamespace: toolNamespace,
         existingPending: existingPending, toolLookupKey: toolLookupKey
@@ -82,6 +83,10 @@ func resolveApprovalRejectionMessage(
         return explicit
     }
     guard let formatter = runConfig.toolErrorFormatter else { return rejectionMessage }
+    if let toolCall {
+        // The formatter is application code, so the invocation counts as executed from here.
+        try contextWrapper.markToolInvocationExecuted(toolCall, toolLookupKey: toolLookupKey, toolName: toolName)
+    }
     do {
         let message = try await formatter(ToolErrorFormatterArgs(
             kind: "approval_rejected", toolType: toolType, toolName: toolName, callId: callId,
@@ -112,6 +117,7 @@ enum ComputerAction {
                 span.data(as: FunctionSpanData.self)?.input = traceInputPayload(action.toolCall)
             }
             let computer = try await action.computerTool.resolveComputer(runContext: contextWrapper)
+            try contextWrapper.markToolInvocationExecuted(action.toolCall.json, toolName: action.computerTool.name)
             try await callHooks(hooks, agent, context: contextWrapper, tool: action.computerTool, start: true)
             let output: String
             do {
@@ -197,6 +203,7 @@ enum ComputerAction {
 
 enum LocalShellAction {
     static func execute(agent: Agent, call: ToolRunLocalShellCall, hooks: RunHooks, contextWrapper: RunContextWrapper, config: RunConfig) async throws -> RunItem {
+        try contextWrapper.markToolInvocationExecuted(call.toolCall.json, toolName: call.localShellTool.name)
         try await callHooks(hooks, agent, context: contextWrapper, tool: call.localShellTool, start: true)
         let result = try await call.localShellTool.executor(LocalShellCommandRequest(ctxWrapper: contextWrapper, data: call.toolCall))
         let raw: JSONObject = ["type": "local_shell_call_output", "call_id": .string(call.toolCall.callId), "output": .string(result)]
@@ -354,14 +361,14 @@ enum ShellAction {
                     "max_output_length": shellCall.action.maxOutputLength.map(JSONValue.int) ?? .null,
                 ]).pythonJSONString()
             }
-            var status = try contextWrapper.getApprovalStatus(toolName: shellTool.name, callId: shellCall.callId, existingPending: currentItem)
+            var status = try contextWrapper.getApprovalStatus(toolName: shellTool.name, callId: shellCall.callId, currentInvocation: currentItem)
             var needsApproval = false
             if status == nil {
                 switch shellTool.needsApproval {
                 case .required(let value): needsApproval = value
                 case .dynamic(let function): needsApproval = try await function(contextWrapper, shellCall.action, shellCall.callId)
                 }
-                status = try contextWrapper.getApprovalStatus(toolName: shellTool.name, callId: shellCall.callId, existingPending: currentItem)
+                status = try contextWrapper.getApprovalStatus(toolName: shellTool.name, callId: shellCall.callId, currentInvocation: currentItem)
             }
             if status == nil, needsApproval {
                 let (resolved, approvalItem) = try await resolveApprovalStatus(
@@ -372,12 +379,13 @@ enum ShellAction {
                 if status == nil { return approvalItem }
             }
             if status == false {
-                let message = await resolveApprovalRejectionMessage(
+                let message = try await resolveApprovalRejectionMessage(
                     contextWrapper: contextWrapper, runConfig: config, toolType: "shell",
-                    toolName: shellTool.name, callId: shellCall.callId, existingPending: currentItem
+                    toolName: shellTool.name, callId: shellCall.callId, toolCall: call.toolCall, existingPending: currentItem
                 )
                 return shellRejectionItem(agent: agent, callId: shellCall.callId, toolCall: call.toolCall, rejectionMessage: message)
             }
+            try contextWrapper.markToolInvocationExecuted(call.toolCall, toolName: shellTool.name)
             try await callHooks(hooks, agent, context: contextWrapper, tool: shellTool, start: true)
             var outputStatus = "completed"
             var outputText = ""
@@ -552,7 +560,7 @@ enum ApplyPatchAction {
                     ["type": .string($0.type), "path": .string($0.path), "diff": $0.diff.map(JSONValue.string) ?? .null]
                 }).pythonJSONString()
             }
-            var status = try contextWrapper.getApprovalStatus(toolName: tool.name, callId: callId, existingPending: currentItem)
+            var status = try contextWrapper.getApprovalStatus(toolName: tool.name, callId: callId, currentInvocation: currentItem)
             var needsApproval = false
             if status == nil {
                 for operation in operations {
@@ -560,7 +568,7 @@ enum ApplyPatchAction {
                     case .required(let value): needsApproval = value
                     case .dynamic(let function): needsApproval = try await function(contextWrapper, operation, callId)
                     }
-                    status = try contextWrapper.getApprovalStatus(toolName: tool.name, callId: callId, existingPending: currentItem)
+                    status = try contextWrapper.getApprovalStatus(toolName: tool.name, callId: callId, currentInvocation: currentItem)
                     if status != nil || needsApproval { break }
                 }
             }
@@ -573,12 +581,13 @@ enum ApplyPatchAction {
                 if status == nil { return approvalItem }
             }
             if status == false {
-                let message = await resolveApprovalRejectionMessage(
+                let message = try await resolveApprovalRejectionMessage(
                     contextWrapper: contextWrapper, runConfig: config, toolType: "apply_patch",
-                    toolName: tool.name, callId: callId, existingPending: currentItem
+                    toolName: tool.name, callId: callId, toolCall: call.toolCall, existingPending: currentItem
                 )
                 return applyPatchRejectionItem(agent: agent, callId: callId, toolCall: call.toolCall, rejectionMessage: message)
             }
+            try contextWrapper.markToolInvocationExecuted(call.toolCall, toolName: tool.name)
             try await callHooks(hooks, agent, context: contextWrapper, tool: tool, start: true)
             var outputStatus = "completed"
             var outputText = ""
@@ -647,14 +656,14 @@ enum CustomToolAction {
             if let span, config.traceIncludeSensitiveData {
                 span.data(as: FunctionSpanData.self)?.input = input
             }
-            var status = try contextWrapper.getApprovalStatus(toolName: tool.name, callId: callId, existingPending: currentItem)
+            var status = try contextWrapper.getApprovalStatus(toolName: tool.name, callId: callId, currentInvocation: currentItem)
             var needsApproval = false
             if status == nil {
                 switch tool.needsApproval {
                 case .required(let value): needsApproval = value
                 case .dynamic(let function): needsApproval = try await function(contextWrapper, input, callId)
                 }
-                status = try contextWrapper.getApprovalStatus(toolName: tool.name, callId: callId, existingPending: currentItem)
+                status = try contextWrapper.getApprovalStatus(toolName: tool.name, callId: callId, currentInvocation: currentItem)
             }
             if status == nil, needsApproval {
                 let (resolved, approvalItem) = try await resolveApprovalStatus(
@@ -665,12 +674,13 @@ enum CustomToolAction {
                 if status == nil { return approvalItem }
             }
             if status == false {
-                let message = await resolveApprovalRejectionMessage(
+                let message = try await resolveApprovalRejectionMessage(
                     contextWrapper: contextWrapper, runConfig: config, toolType: "custom",
-                    toolName: tool.name, callId: callId, existingPending: currentItem
+                    toolName: tool.name, callId: callId, toolCall: call.toolCall.json, existingPending: currentItem
                 )
                 return outputItem(message)
             }
+            try contextWrapper.markToolInvocationExecuted(call.toolCall.json, toolName: tool.name)
             try await callHooks(hooks, agent, context: toolContext, tool: tool, start: true)
             var outputText: String
             do {

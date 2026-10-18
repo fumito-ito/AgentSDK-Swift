@@ -786,58 +786,58 @@ func interruptedTurnFunctionResults(
     }
 }
 
-/// Resumes a turn that was interrupted for tool approvals.
-func resolveInterruptedTurn(
+/// Filters function tool runs during resume, honoring approvals and committed outputs (upstream
+/// `_select_function_tool_runs_for_resume`).
+private func selectFunctionToolRunsForResume(
+    _ runs: [ToolRunFunction],
+    approvalItemsByCallId: [String: ToolApprovalItem],
+    outputCallIds: Set<String>,
     agent: Agent,
-    allTools: [any Tool],
-    originalInput: RunInput,
-    originalPreStepItems: [RunItem],
-    newResponse: ModelResponse,
-    processedResponse: ProcessedResponse,
-    hooks: RunHooks,
     contextWrapper: RunContextWrapper,
-    runConfig: RunConfig,
-    serverManagesConversation: Bool,
-    errorHandlers: RunErrorHandlers?
-) async throws -> SingleStepResult {
-    // Items from the interrupted turn that already have outputs are not re-executed.
-    var outputCallIds: Set<String> = []
-    for case let item as ToolCallOutputItem in originalPreStepItems {
-        if let callId = item.callId { outputCallIds.insert(callId) }
+    runConfig: RunConfig
+) async throws -> (selected: [ToolRunFunction], rejections: [RunItem], pending: [ToolApprovalItem]) {
+    func functionOutputExists(_ run: ToolRunFunction) throws -> Bool {
+        let callId = run.toolCall.callId
+        if approvalItemsByCallId[callId] == nil, outputCallIds.contains(callId) { return true }
+        let binding = try contextWrapper.approvedToolInvocationStatus(
+            run.toolCall.json, toolLookupKey: getFunctionToolLookupKeyForTool(run.functionTool)
+        )
+        return binding?.completed ?? false
     }
-    let approvalItemsByCallId = indexApprovalItemsByCallId(originalPreStepItems)
-    // Approval placeholders are replaced by tool outputs (or kept when still pending).
-    let preStepItems = originalPreStepItems.filter { !($0 is ToolApprovalItem) }
 
     var pendingInterruptions: [ToolApprovalItem] = []
     var rejectionItems: [RunItem] = []
     var approvedFunctions: [ToolRunFunction] = []
-    for run in processedResponse.functions where !outputCallIds.contains(run.toolCall.callId) {
+    for run in runs where try !functionOutputExists(run) {
         let existing = approvalItemsByCallId[run.toolCall.callId]
         let current = ToolApprovalItem(
             agent: agent, rawItem: run.toolCall.json, toolName: run.functionTool.name,
             toolNamespace: getToolCallNamespace(run.toolCall.json), toolOrigin: getFunctionToolOrigin(run.functionTool),
-            toolLookupKey: getFunctionToolLookupKeyForTool(run.functionTool)
+            toolLookupKey: getFunctionToolLookupKeyForCall(run.toolCall.json)
         )
         var status = try contextWrapper.getApprovalStatus(
             toolName: run.functionTool.name, callId: run.toolCall.callId, toolNamespace: getToolCallNamespace(run.toolCall.json),
-            existingPending: existing ?? current, toolLookupKey: current.toolLookupKey
+            existingPending: existing, toolLookupKey: current.toolLookupKey, currentInvocation: current
         )
         var requiresApproval = true
         if status == nil {
-            requiresApproval = try await functionNeedsApproval(run.functionTool, contextWrapper, run.toolCall)
+            requiresApproval = existing != nil ? true : try await functionNeedsApproval(run.functionTool, contextWrapper, run.toolCall)
             status = try contextWrapper.getApprovalStatus(
                 toolName: run.functionTool.name, callId: run.toolCall.callId, toolNamespace: getToolCallNamespace(run.toolCall.json),
-                existingPending: existing ?? current, toolLookupKey: current.toolLookupKey
+                existingPending: existing, toolLookupKey: current.toolLookupKey, currentInvocation: current
             )
         }
         switch status {
         case false?:
-            let message = await resolveApprovalRejectionMessage(
+            let message = try await resolveApprovalRejectionMessage(
                 contextWrapper: contextWrapper, runConfig: runConfig, toolType: "function",
-                toolName: run.functionTool.name, callId: run.toolCall.callId,
-                toolNamespace: getToolCallNamespace(run.toolCall.json), toolLookupKey: current.toolLookupKey,
-                existingPending: existing ?? current
+                toolName: getToolCallTraceName(run.toolCall.json) ?? run.functionTool.name, callId: run.toolCall.callId,
+                toolCall: run.toolCall.json, toolNamespace: getToolCallNamespace(run.toolCall.json),
+                toolLookupKey: getFunctionToolLookupKeyForTool(run.functionTool),
+                existingPending: existing ?? ToolApprovalItem(
+                    agent: agent, rawItem: run.toolCall.json, toolName: run.functionTool.name,
+                    toolNamespace: getToolCallNamespace(run.toolCall.json), toolLookupKey: getFunctionToolLookupKeyForTool(run.functionTool)
+                )
             )
             rejectionItems.append(try functionRejectionItem(
                 agent: agent, toolCall: run.toolCall, rejectionMessage: message,
@@ -853,6 +853,108 @@ func resolveInterruptedTurn(
             }
         }
     }
+    return (approvedFunctions, rejectionItems, pendingInterruptions)
+}
+
+/// Resolves custom tool approvals whose call is no longer queued, for example because the restored
+/// agent no longer has the tool (upstream `_custom_reconciliation_approval`).
+///
+/// Swift: upstream re-classifies every interrupted call against the current tool inventory. This
+/// covers the rejected and still-pending cases of that reconciliation for custom tools.
+private func resolveUnqueuedCustomToolApprovals(
+    approvals: [ToolApprovalItem],
+    queuedCallIds: Set<String>,
+    outputCallIds: Set<String>,
+    agent: Agent,
+    contextWrapper: RunContextWrapper,
+    runConfig: RunConfig,
+    pendingInterruptions: inout [ToolApprovalItem]
+) async throws -> [RunItem] {
+    var outputs: [RunItem] = []
+    for approval in approvals where approval.rawItem.type == "custom_tool_call" && approval.agent === agent {
+        guard let call = ResponseCustomToolCall(json: approval.rawItem), !call.callId.isEmpty,
+              !queuedCallIds.contains(call.callId), !outputCallIds.contains(call.callId) else { continue }
+        let status = try contextWrapper.getApprovalStatus(
+            toolName: approval.toolName ?? call.name, callId: call.callId,
+            toolNamespace: approval.toolNamespace, existingPending: approval
+        )
+        switch status {
+        case false?:
+            let message = try await resolveApprovalRejectionMessage(
+                contextWrapper: contextWrapper, runConfig: runConfig, toolType: "custom",
+                toolName: approval.toolName ?? call.name, callId: call.callId, toolCall: approval.rawItem,
+                toolNamespace: approval.toolNamespace, existingPending: approval
+            )
+            var raw: JSONObject = ["type": "custom_tool_call_output", "call_id": .string(call.callId), "output": .string(message)]
+            ItemHelpers.copyToolCallCaller(approval.rawItem, into: &raw)
+            outputs.append(ToolCallOutputItem(agent: agent, rawItem: raw, output: message))
+        case nil:
+            if !pendingInterruptions.contains(where: { $0 === approval }) { pendingInterruptions.append(approval) }
+        case true?:
+            throw ModelBehaviorError("Tool \(call.name) not found in agent \(agent.name)")
+        }
+    }
+    return outputs
+}
+
+/// Resumes a turn that was interrupted for tool approvals.
+func resolveInterruptedTurn(
+    agent: Agent,
+    allTools: [any Tool],
+    originalInput: RunInput,
+    originalPreStepItems: [RunItem],
+    newResponse: ModelResponse,
+    processedResponse: ProcessedResponse,
+    hooks: RunHooks,
+    contextWrapper: RunContextWrapper,
+    runConfig: RunConfig,
+    serverManagesConversation: Bool,
+    errorHandlers: RunErrorHandlers?
+) async throws -> SingleStepResult {
+    try registerToolCallItems(contextWrapper, originalPreStepItems, validateInvocations: false)
+    var processedResponse = processedResponse
+    try dedupeProcessedResponseInvocations(
+        &processedResponse, contextWrapper: contextWrapper, existingItems: originalPreStepItems, filterCompleted: false
+    )
+    // Items from the interrupted turn that already have outputs are not re-executed.
+    var outputCallIds: Set<String> = []
+    for case let item as ToolCallOutputItem in originalPreStepItems {
+        if let callId = item.callId { outputCallIds.insert(callId) }
+    }
+    let executedHandoffCallIds = Set(originalPreStepItems.compactMap { ($0 as? HandoffOutputItem)?.rawItem.string("call_id") })
+    let approvalItemsByCallId = indexApprovalItemsByCallId(originalPreStepItems)
+    // Approval placeholders are replaced by tool outputs (or kept when still pending).
+    let preStepItems = originalPreStepItems.filter { !($0 is ToolApprovalItem) }
+
+    // Validate every current execution candidate before any dynamic approval callback or
+    // output-based replay suppression can run. This keeps a changed invocation under an approved
+    // call ID from triggering sibling user code or hiding behind a previously committed output.
+    for run in processedResponse.functions {
+        try contextWrapper.approvedToolInvocationStatus(run.toolCall.json, toolLookupKey: getFunctionToolLookupKeyForTool(run.functionTool))
+    }
+    for run in processedResponse.handoffs {
+        try contextWrapper.approvedToolInvocationStatus(run.toolCall.json, invocationRole: "handoff")
+    }
+    try validateUnresolvedFunctionCalls(contextWrapper, processedResponse.functionToolsNotFound)
+
+    var (approvedFunctions, rejectionItems, pendingInterruptions) = try await selectFunctionToolRunsForResume(
+        processedResponse.functions,
+        approvalItemsByCallId: approvalItemsByCallId,
+        outputCallIds: outputCallIds,
+        agent: agent,
+        contextWrapper: contextWrapper,
+        runConfig: runConfig
+    )
+
+    rejectionItems.append(contentsOf: try await resolveUnqueuedCustomToolApprovals(
+        approvals: originalPreStepItems.compactMap { $0 as? ToolApprovalItem },
+        queuedCallIds: Set(processedResponse.customToolCalls.map(\.toolCall.callId)),
+        outputCallIds: outputCallIds,
+        agent: agent,
+        contextWrapper: contextWrapper,
+        runConfig: runConfig,
+        pendingInterruptions: &pendingInterruptions
+    ))
 
     var plan = ToolExecutionPlan(
         functionRuns: approvedFunctions,
@@ -875,7 +977,9 @@ func resolveInterruptedTurn(
     var newStepItems: [RunItem] = rejectionItems + results.resultItems + plan.approvedMCPResponses
     var interruptions = results.interruptions + plan.pendingInterruptions
     newStepItems.append(contentsOf: plan.pendingInterruptions)
+    try registerToolCallItems(contextWrapper, newStepItems)
     newStepItems.append(contentsOf: try await executeMCPApprovalRequests(agent: agent, requests: plan.mcpRequestsWithCallback, contextWrapper: contextWrapper))
+    try registerToolCallItems(contextWrapper, newStepItems)
 
     var resumedProcessed = processedResponse
     resumedProcessed.interruptions = interruptions
@@ -890,10 +994,13 @@ func resolveInterruptedTurn(
         )
     }
 
-    if !processedResponse.handoffs.isEmpty {
+    let pendingHandoffs = processedResponse.handoffs.filter {
+        $0.toolCall.callId.isEmpty || !executedHandoffCallIds.contains($0.toolCall.callId)
+    }
+    if !pendingHandoffs.isEmpty {
         return try await executeHandoffs(
             agent: agent, originalInput: originalInput, preStepItems: preStepItems, newStepItems: newStepItems,
-            newResponse: newResponse, runHandoffs: processedResponse.handoffs, hooks: hooks, contextWrapper: contextWrapper,
+            newResponse: newResponse, runHandoffs: pendingHandoffs, hooks: hooks, contextWrapper: contextWrapper,
             runConfig: runConfig, serverManagesConversation: serverManagesConversation,
             toolInputGuardrailResults: results.toolInputGuardrailResults, toolOutputGuardrailResults: results.toolOutputGuardrailResults
         )

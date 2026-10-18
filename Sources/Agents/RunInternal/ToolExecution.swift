@@ -204,13 +204,13 @@ struct FunctionToolBatchExecutor {
         )
         var status = try contextWrapper.getApprovalStatus(
             toolName: tool.name, callId: toolCall.callId, toolNamespace: namespace,
-            existingPending: approvalItem, toolLookupKey: lookupKey
+            toolLookupKey: lookupKey, currentInvocation: approvalItem
         )
         if status == nil {
             let needsApproval = try await functionNeedsApproval(tool, contextWrapper, toolCall)
             status = try contextWrapper.getApprovalStatus(
                 toolName: tool.name, callId: toolCall.callId, toolNamespace: namespace,
-                existingPending: approvalItem, toolLookupKey: lookupKey
+                toolLookupKey: lookupKey, currentInvocation: approvalItem
             )
             if status == nil, !needsApproval { return nil }
         }
@@ -219,7 +219,7 @@ struct FunctionToolBatchExecutor {
                 let rejected = try await executeToolInputGuardrails(tool: tool, toolContext: toolContext, agent: agent, results: inputGuardrailResults)
                 status = try contextWrapper.getApprovalStatus(
                     toolName: tool.name, callId: toolCall.callId, toolNamespace: namespace,
-                    existingPending: approvalItem, toolLookupKey: lookupKey
+                    toolLookupKey: lookupKey, currentInvocation: approvalItem
                 )
                 if status == nil, let rejected {
                     return FunctionToolResult(
@@ -237,10 +237,10 @@ struct FunctionToolBatchExecutor {
             return FunctionToolResult(tool: tool, output: Optional<String>.none as any Sendable, runItem: approvalItem)
         }
         if status == true { return nil }
-        let message = await resolveApprovalRejectionMessage(
+        let message = try await resolveApprovalRejectionMessage(
             contextWrapper: contextWrapper, runConfig: config, toolType: "function",
             toolName: toolTraceName(tool.name, namespace: namespace) ?? tool.name, callId: toolCall.callId,
-            toolNamespace: namespace, toolLookupKey: lookupKey, existingPending: approvalItem
+            toolCall: toolCall.json, toolNamespace: namespace, toolLookupKey: lookupKey, existingPending: approvalItem
         )
         span.setError(SpanError(
             message: getTraceError(traceIncludeSensitiveData: config.traceIncludeSensitiveData, errorMessage: message, redactedMessage: "Tool execution rejected"),
@@ -260,6 +260,7 @@ struct FunctionToolBatchExecutor {
     }
 
     private func executeSingleToolBody(tool: FunctionTool, toolCall: ResponseFunctionToolCall, toolContext: ToolContext) async throws -> FunctionToolResult {
+        try contextWrapper.markToolInvocationExecuted(toolCall.json, toolLookupKey: getFunctionToolLookupKeyForTool(tool))
         if let rejected = try await executeToolInputGuardrails(tool: tool, toolContext: toolContext, agent: agent, results: inputGuardrailResults) {
             let provider = functionToolErrorOutput(toolCall: toolCall.json, output: rejected, outputJSONSchema: tool.outputJSONSchema)
             return FunctionToolResult(
