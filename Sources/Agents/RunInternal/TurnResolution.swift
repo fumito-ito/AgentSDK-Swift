@@ -71,7 +71,7 @@ func processModelResponse( // swiftlint:disable:this cyclomatic_complexity funct
             guard shellTool.executor != nil else {
                 throw fail("Model produced local shell call without a local shell executor.", spanMessage: "Local shell executor not found")
             }
-            shellCalls.append(ToolRunShellCall(toolCall: output, shellTool: shellTool))
+            shellCalls.append(ToolRunShellCall(toolCall: output, shellTool: shellTool, callItem: item))
         case "shell_call_output":
             toolsUsed.append(shellTool?.name ?? "shell")
             var raw = output.removing("created_by")
@@ -92,7 +92,7 @@ func processModelResponse( // swiftlint:disable:this cyclomatic_complexity funct
             item.resolvedToolName = applyPatchTool.name
             items.append(item)
             toolsUsed.append(applyPatchTool.name)
-            applyPatchCalls.append(ToolRunApplyPatchCall(toolCall: raw, applyPatchTool: applyPatchTool))
+            applyPatchCalls.append(ToolRunApplyPatchCall(toolCall: raw, applyPatchTool: applyPatchTool, callItem: item))
         case "compaction":
             items.append(CompactionItem(agent: agent, rawItem: output.removing("created_by")))
         case "tool_search_call":
@@ -126,14 +126,15 @@ func processModelResponse( // swiftlint:disable:this cyclomatic_complexity funct
             item.resolvedToolName = computerTool.name
             items.append(item)
             toolsUsed.append(computerTool.name)
-            computerActions.append(ToolRunComputerAction(toolCall: call, computerTool: computerTool))
+            computerActions.append(ToolRunComputerAction(toolCall: call, computerTool: computerTool, callItem: item))
         case "mcp_approval_request":
             guard let request = McpApprovalRequest(json: output) else { continue }
             guard let server = hostedMCPServers[request.serverLabel] else {
                 throw fail("MCP server label \(request.serverLabel) not found", spanMessage: "MCP server label not found", data: ["server_label": .string(request.serverLabel)])
             }
-            items.append(MCPApprovalRequestItem(agent: agent, rawItem: output))
-            mcpApprovalRequests.append(ToolRunMCPApprovalRequest(requestItem: request, mcpTool: server))
+            let item = MCPApprovalRequestItem(agent: agent, rawItem: output)
+            items.append(item)
+            mcpApprovalRequests.append(ToolRunMCPApprovalRequest(requestItem: request, mcpTool: server, callItem: item))
             if server.onApprovalRequest == nil {
                 logger.debug("Hosted MCP server \(request.serverLabel) has no on_approval_request hook; approvals will be surfaced as interruptions for the caller to handle.")
             }
@@ -160,13 +161,13 @@ func processModelResponse( // swiftlint:disable:this cyclomatic_complexity funct
                 item.resolvedToolName = localShellTool.name
                 items.append(item)
                 toolsUsed.append("local_shell")
-                localShellCalls.append(ToolRunLocalShellCall(toolCall: call, localShellTool: localShellTool))
+                localShellCalls.append(ToolRunLocalShellCall(toolCall: call, localShellTool: localShellTool, callItem: item))
             } else if let shellTool {
                 let item = ToolCallItem(agent: agent, rawItem: output)
                 item.resolvedToolName = shellTool.name
                 items.append(item)
                 toolsUsed.append(shellTool.name)
-                shellCalls.append(ToolRunShellCall(toolCall: output, shellTool: shellTool))
+                shellCalls.append(ToolRunShellCall(toolCall: output, shellTool: shellTool, callItem: item))
             } else {
                 toolsUsed.append("local_shell")
                 throw fail("Model produced local shell call without a local shell tool.", spanMessage: "Local shell tool not found")
@@ -174,9 +175,10 @@ func processModelResponse( // swiftlint:disable:this cyclomatic_complexity funct
         case "custom_tool_call":
             guard let call = ResponseCustomToolCall(json: output) else { continue }
             if let customTool = customToolMap[call.name] {
-                items.append(ToolCallItem(agent: agent, rawItem: output))
+                let item = ToolCallItem(agent: agent, rawItem: output)
+                items.append(item)
                 toolsUsed.append(customTool.name)
-                customToolCalls.append(ToolRunCustom(toolCall: call, customTool: customTool))
+                customToolCalls.append(ToolRunCustom(toolCall: call, customTool: customTool, callItem: item))
             } else if isApplyPatchName(call.name, applyPatchTool), let pseudo = try normalizeApplyPatchFallbackCall(output) {
                 guard let applyPatchTool else {
                     toolsUsed.append("apply_patch")
@@ -186,7 +188,7 @@ func processModelResponse( // swiftlint:disable:this cyclomatic_complexity funct
                 item.resolvedToolName = applyPatchTool.name
                 items.append(item)
                 toolsUsed.append(applyPatchTool.name)
-                applyPatchCalls.append(ToolRunApplyPatchCall(toolCall: pseudo, applyPatchTool: applyPatchTool))
+                applyPatchCalls.append(ToolRunApplyPatchCall(toolCall: pseudo, applyPatchTool: applyPatchTool, callItem: item))
             } else {
                 items.append(ToolCallItem(agent: agent, rawItem: output))
                 throw fail("Tool \(call.name) not found in agent \(agent.name)", spanMessage: "Custom tool not found", data: ["tool_name": .string(call.name)])
@@ -204,33 +206,36 @@ func processModelResponse( // swiftlint:disable:this cyclomatic_complexity funct
                 item.resolvedToolName = applyPatchTool.name
                 items.append(item)
                 toolsUsed.append(applyPatchTool.name)
-                applyPatchCalls.append(ToolRunApplyPatchCall(toolCall: pseudo, applyPatchTool: applyPatchTool))
+                applyPatchCalls.append(ToolRunApplyPatchCall(toolCall: pseudo, applyPatchTool: applyPatchTool, callItem: item))
                 continue
             }
             toolsUsed.append(getToolCallTraceName(call.json) ?? call.name)
             let qualifiedName = getToolCallQualifiedName(call.json)
             if isHandoffToolCall(output, Set(handoffMap.keys)), let handoff = handoffMap[call.name] {
-                items.append(HandoffCallItem(agent: agent, rawItem: output))
-                runHandoffs.append(ToolRunHandoff(handoff: handoff, toolCall: call))
+                let item = HandoffCallItem(agent: agent, rawItem: output)
+                items.append(item)
+                runHandoffs.append(ToolRunHandoff(handoff: handoff, toolCall: call, callItem: item))
                 continue
             }
             guard let functionTool = lookupKey.flatMap({ functionMap[$0] }) else {
                 attachErrorToCurrentSpan(SpanError(message: "Tool not found", data: ["tool_name": .string(qualifiedName ?? call.name)]))
                 if runConfig?.toolNotFoundBehavior == .returnErrorToModel {
-                    items.append(ToolCallItem(agent: agent, rawItem: output))
-                    functionsNotFound.append(ToolRunFunctionNotFound(toolCall: call, toolName: qualifiedName ?? call.name))
+                    let item = ToolCallItem(agent: agent, rawItem: output)
+                    items.append(item)
+                    functionsNotFound.append(ToolRunFunctionNotFound(toolCall: call, toolName: qualifiedName ?? call.name, callItem: item))
                     continue
                 }
                 throw ModelBehaviorError("Tool \(qualifiedName ?? call.name) not found in agent \(agent.name)")
             }
-            items.append(ToolCallItem(
+            let item = ToolCallItem(
                 agent: agent,
                 rawItem: output,
                 description: functionTool.description,
                 title: functionTool.mcpTitle,
                 toolOrigin: getFunctionToolOrigin(functionTool)
-            ))
-            functions.append(ToolRunFunction(toolCall: call, functionTool: functionTool))
+            )
+            items.append(item)
+            functions.append(ToolRunFunction(toolCall: call, functionTool: functionTool, callItem: item))
         default:
             logger.warning("Unexpected output type, ignoring: \(outputType ?? "None")")
         }
@@ -378,8 +383,10 @@ func executeHandoffs(
     let span = handoffSpan(fromAgent: agent.name)
     var sessionStepItems: [RunItem]?
     var nestedHistoryOwnedItems: [RunItem]?
+    var committedHandoffOutput: HandoffOutputItem?
     let newAgent: Agent = try await span.run {
         let handoff = actual.handoff
+        try contextWrapper.markToolInvocationExecuted(actual.toolCall.json, invocationRole: "handoff")
         let target = try await handoff.onInvokeHandoff(contextWrapper, actual.toolCall.arguments)
         guard let newAgent = target as? Agent else {
             throw UserError("Handoff target is not an Agent")
@@ -397,6 +404,7 @@ func executeHandoffs(
             targetAgent: newAgent
         )
         newStepItems.append(handoffOutput)
+        committedHandoffOutput = handoffOutput
 
         async let runHook: Void = hooks.onHandoff(context: contextWrapper, fromAgent: agent, toAgent: newAgent)
         async let agentHook: Void = agent.hooks?.onHandoff(context: contextWrapper, agent: newAgent, source: agent) ?? ()
@@ -435,6 +443,10 @@ func executeHandoffs(
             newStepItems = nested.inputItems ?? nested.newItems
         }
         return newAgent
+    }
+    if let committedHandoffOutput,
+       (newStepItems + (sessionStepItems ?? [])).contains(where: { $0 === committedHandoffOutput }) {
+        try registerToolCallItems(contextWrapper, [committedHandoffOutput])
     }
     return SingleStepResult(
         originalInput: originalInput,
@@ -480,12 +492,19 @@ func executeToolsAndSideEffects( // swiftlint:disable:this function_body_length
     contextWrapper: RunContextWrapper,
     runConfig: RunConfig,
     errorHandlers: RunErrorHandlers?,
-    serverManagesConversation: Bool
+    serverManagesConversation: Bool,
+    precomputedSkipped: Set<ObjectIdentifier>? = nil
 ) async throws -> SingleStepResult {
     var processedResponse = processedResponse
+    try registerToolCallItems(contextWrapper, preStepItems, validateInvocations: false)
+    let skipped = try precomputedSkipped ?? dedupeProcessedResponseInvocations(
+        &processedResponse, contextWrapper: contextWrapper, existingItems: preStepItems
+    )
+    try registerToolCallItems(contextWrapper, processedResponse.newItems)
+    try validateUnresolvedFunctionCalls(contextWrapper, processedResponse.functionToolsNotFound)
     let approvalItemsByCallId = indexApprovalItemsByCallId(preStepItems)
     let plan = try buildPlanForFreshTurn(processed: processedResponse, agent: agent, contextWrapper: contextWrapper, approvalItemsByCallId: approvalItemsByCallId)
-    var newStepItems = processedResponse.newItems
+    var newStepItems = dedupeToolCallItems(existingItems: preStepItems, newItems: processedResponse.newItems, skipped: skipped)
 
     let results = try await executeToolPlan(plan: plan, agent: agent, allTools: allTools, hooks: hooks, contextWrapper: contextWrapper, runConfig: runConfig)
     newStepItems.append(contentsOf: results.resultItems)
@@ -499,6 +518,7 @@ func executeToolsAndSideEffects( // swiftlint:disable:this function_body_length
         interruptions.append(contentsOf: plan.pendingInterruptions)
         newStepItems.append(contentsOf: plan.pendingInterruptions)
     }
+    try registerToolCallItems(contextWrapper, newStepItems)
     processedResponse.interruptions = interruptions
 
     if !interruptions.isEmpty {
@@ -515,6 +535,7 @@ func executeToolsAndSideEffects( // swiftlint:disable:this function_body_length
     }
 
     newStepItems.append(contentsOf: try await executeMCPApprovalRequests(agent: agent, requests: plan.mcpRequestsWithCallback, contextWrapper: contextWrapper))
+    try registerToolCallItems(contextWrapper, newStepItems)
 
     if !processedResponse.handoffs.isEmpty {
         return try await executeHandoffs(
@@ -555,7 +576,7 @@ func executeToolsAndSideEffects( // swiftlint:disable:this function_body_length
     }
 
     if !processedResponse.hasToolsOrApprovalsToRun() {
-        let hasToolActivityWithoutMessage = messageItems.isEmpty && !processedResponse.toolsUsed.isEmpty
+        let hasToolActivityWithoutMessage = messageItems.isEmpty && (!processedResponse.toolsUsed.isEmpty || !skipped.isEmpty)
         if !hasToolActivityWithoutMessage {
             if let refusal {
                 let refusalError = ModelRefusalError(refusal: refusal)
@@ -636,16 +657,21 @@ func getSingleStepResultFromResponse(
     afterInvocationValidation: ((ProcessedResponse?) async throws -> Void)? = nil,
     beforeSideEffects: (() async throws -> Void)? = nil
 ) async throws -> SingleStepResult {
-    let processed: ProcessedResponse
+    var processed: ProcessedResponse
     do {
         processed = try processModelResponse(
             agent: agent, allTools: allTools, response: newResponse, outputSchema: outputSchema,
             handoffs: handoffs, runConfig: runConfig
         )
     } catch let error as ModelBehaviorError {
+        try preflightResponseInvocationsAfterProcessingError(
+            response: newResponse, allTools: allTools, handoffs: handoffs, contextWrapper: contextWrapper
+        )
         try await afterInvocationValidation?(nil)
         throw error
     }
+    try registerToolCallItems(contextWrapper, preStepItems, validateInvocations: false)
+    let skipped = try dedupeProcessedResponseInvocations(&processed, contextWrapper: contextWrapper, existingItems: preStepItems)
     try await afterInvocationValidation?(processed)
     try await beforeSideEffects?()
     toolUseTracker.recordProcessedResponse(agent, processed)
@@ -653,8 +679,82 @@ func getSingleStepResultFromResponse(
         agent: agent, allTools: allTools, originalInput: originalInput, preStepItems: preStepItems,
         newResponse: newResponse, processedResponse: processed, outputSchema: outputSchema, hooks: hooks,
         contextWrapper: contextWrapper, runConfig: runConfig, errorHandlers: errorHandlers,
-        serverManagesConversation: serverManagesConversation
+        serverManagesConversation: serverManagesConversation, precomputedSkipped: skipped
     )
+}
+
+/// Rejects call-ID reuse before reporting an unrelated response-processing error.
+func preflightResponseInvocationsAfterProcessingError(
+    response: ModelResponse,
+    allTools: [any Tool],
+    handoffs: [Handoff],
+    contextWrapper: RunContextWrapper
+) throws {
+    let handoffNames = Set(handoffs.map(\.toolName))
+    let functionMap = (try? buildFunctionToolLookupMap(allTools.filter { $0 is FunctionTool })) ?? [:]
+    var customToolNames: Set<String> = []
+    for case let tool as CustomTool in allTools { customToolNames.insert(tool.name) }
+    let computerTool = allTools.lazy.compactMap { $0 as? ComputerTool }.first
+    let localShellTool = allTools.lazy.compactMap { $0 as? LocalShellTool }.first
+    let shellTool = allTools.lazy.compactMap { $0 as? ShellTool }.first
+    let applyPatchTool = allTools.lazy.compactMap { $0 as? ApplyPatchTool }.first
+    let reusedInResponse = "Model reused a tool call ID for a different invocation in one response. Use a unique call ID for each tool invocation."
+    let reused = "Model reused a tool call ID for a different invocation. Use a unique call ID for each tool invocation."
+    var responseIdentities: [String: ToolInvocationIdentity?] = [:]
+    let invocations = contextWrapper.toolInvocations
+
+    for output in response.output {
+        var rawItem = output
+        var toolLookupKey: FunctionToolLookupKey?
+        var toolName: String?
+        var invocationRole: String?
+        switch output.type {
+        case "function_call":
+            toolLookupKey = getFunctionToolLookupKeyForCall(output)
+            let name = output.string("name")
+            if isHandoffToolCall(output, handoffNames) {
+                invocationRole = "handoff"
+            } else if isApplyPatchName(name, applyPatchTool), toolLookupKey.flatMap({ functionMap[$0] }) == nil {
+                rawItem = (try? normalizeApplyPatchFallbackCall(output)).flatMap { $0 } ?? output
+                toolName = applyPatchTool?.name
+            }
+        case "custom_tool_call":
+            let name = output.string("name")
+            if let name, customToolNames.contains(name) {
+                toolName = name
+            } else if isApplyPatchName(name, applyPatchTool) {
+                rawItem = (try? normalizeApplyPatchFallbackCall(output)).flatMap { $0 } ?? output
+                toolName = applyPatchTool?.name
+            }
+        case "shell_call":
+            toolName = shellTool?.name
+        case "local_shell_call":
+            toolName = (localShellTool?.name) ?? shellTool?.name
+        case "apply_patch_call":
+            toolName = applyPatchTool?.name
+        case "computer_call":
+            toolName = computerTool?.name
+        default:
+            break
+        }
+
+        guard let callIdentity = toolInvocationCallId(rawItem) else { continue }
+        guard let callId = callIdentity.callId else {
+            throw ModelBehaviorError("Tool invocations require a non-empty string call ID before execution.")
+        }
+        let identity = toolInvocationIdentity(rawItem, toolLookupKey: toolLookupKey, toolName: toolName, invocationRole: invocationRole)
+        if let previous = responseIdentities[callId] {
+            guard let previous, let identity, previous == identity else { throw ModelBehaviorError(reusedInResponse) }
+        }
+        responseIdentities[callId] = identity
+
+        guard let record = invocations[callId] else { continue }
+        guard let identity else {
+            if output.type != "mcp_approval_request" { throw ModelBehaviorError(reused) }
+            continue
+        }
+        if !record.matches(identity) { throw ModelBehaviorError(reused) }
+    }
 }
 
 /// Rebuilds the interrupted turn's function results in response order, combining results executed

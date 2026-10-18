@@ -50,7 +50,7 @@ public enum Runner {
         session: (any Session)? = nil
     ) async throws -> RunResult {
         try await getDefaultAgentRunner().run(
-            startingAgent, input: .input(input), contextWrapper: RunContextWrapper(context: context), maxTurns: maxTurns,
+            startingAgent, input: .input(input), contextWrapper: ensureContextWrapper(context), maxTurns: maxTurns,
             hooks: hooks, runConfig: runConfig, errorHandlers: errorHandlers, previousResponseId: previousResponseId,
             autoPreviousResponseId: autoPreviousResponseId, conversationId: conversationId, session: session
         )
@@ -118,7 +118,7 @@ public enum Runner {
         session: (any Session)? = nil
     ) throws -> RunResultStreaming {
         try getDefaultAgentRunner().runStreamed(
-            startingAgent, input: .input(input), contextWrapper: RunContextWrapper(context: context), maxTurns: maxTurns,
+            startingAgent, input: .input(input), contextWrapper: ensureContextWrapper(context), maxTurns: maxTurns,
             hooks: hooks, runConfig: runConfig, errorHandlers: errorHandlers, previousResponseId: previousResponseId,
             autoPreviousResponseId: autoPreviousResponseId, conversationId: conversationId, session: session
         )
@@ -1131,6 +1131,14 @@ private final class RunDriver: @unchecked Sendable {
         sessionItems.append(contentsOf: items)
         return saved
     }
+}
+
+/// Normalizes a context value into a `RunContextWrapper` (upstream `ensure_context_wrapper`).
+///
+/// A wrapper passed as the context is used as-is, so its approvals and usage carry into the run.
+func ensureContextWrapper(_ context: any Sendable) -> RunContextWrapper {
+    if let wrapper = context as? RunContextWrapper { return wrapper }
+    return RunContextWrapper(context: context)
 }
 
 /// Returns the context wrapper for a resumed run, applying an optional override (upstream

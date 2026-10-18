@@ -590,3 +590,91 @@ struct ToolApprovalState: Sendable {
         }
     }
 }
+
+// MARK: - Run context entry points
+
+extension RunContextWrapper {
+    /// Validates and registers one canonical invocation (upstream `_tool_invocation_status`).
+    @discardableResult
+    func toolInvocationStatus(
+        _ rawItem: JSONObject,
+        toolLookupKey: FunctionToolLookupKey? = nil,
+        toolName: String? = nil,
+        invocationRole: String? = nil
+    ) throws -> ToolInvocationStatus? {
+        try toolStateBox.mutate {
+            try $0.toolInvocationStatus(rawItem, toolLookupKey: toolLookupKey, toolName: toolName, invocationRole: invocationRole)
+        }
+    }
+
+    /// Returns an invocation's status when an approval decision applies to it.
+    @discardableResult
+    func approvedToolInvocationStatus(
+        _ rawItem: JSONObject,
+        toolLookupKey: FunctionToolLookupKey? = nil,
+        toolName: String? = nil,
+        invocationRole: String? = nil,
+        approvalItem: ToolApprovalItem? = nil
+    ) throws -> ToolInvocationStatus? {
+        try toolStateBox.mutate {
+            try $0.approvedToolInvocationStatus(
+                rawItem,
+                toolLookupKey: toolLookupKey,
+                toolName: toolName,
+                invocationRole: invocationRole,
+                approvalItem: approvalItem
+            )
+        }
+    }
+
+    /// Replaces an unresolved invocation identity before execution begins.
+    @discardableResult
+    func rebindToolInvocation(
+        _ rawItem: JSONObject,
+        previousIdentity: ToolInvocationIdentity,
+        toolLookupKey: FunctionToolLookupKey? = nil,
+        toolName: String? = nil,
+        invocationRole: String? = nil
+    ) throws -> ToolInvocationStatus? {
+        try toolStateBox.mutate {
+            try $0.rebindToolInvocation(
+                rawItem,
+                previousIdentity: previousIdentity,
+                toolLookupKey: toolLookupKey,
+                toolName: toolName,
+                invocationRole: invocationRole
+            )
+        }
+    }
+
+    /// Marks an invocation executed before the first user-code side effect.
+    func markToolInvocationExecuted(
+        _ rawItem: JSONObject,
+        toolLookupKey: FunctionToolLookupKey? = nil,
+        toolName: String? = nil,
+        invocationRole: String? = nil
+    ) throws {
+        try toolStateBox.mutate {
+            try $0.markToolInvocationExecuted(rawItem, toolLookupKey: toolLookupKey, toolName: toolName, invocationRole: invocationRole)
+        }
+    }
+
+    /// Marks a canonical invocation completed when its output is committed.
+    func markToolCallCompleted(_ rawItem: JSONObject) {
+        toolStateBox.mutate { $0.markToolCallCompleted(rawItem) }
+    }
+
+    /// Rebuilds a missing binding from a serialized pending approval item.
+    func restorePendingApprovalBinding(_ approvalItem: ToolApprovalItem) throws {
+        try toolStateBox.mutate { try $0.restorePendingApprovalBinding(approvalItem) }
+    }
+
+    /// Returns a hosted MCP decision and its rejection message from one record.
+    func resolveHostedMCPApprovalDecision(_ approvalItem: ToolApprovalItem, allowLegacyExact: Bool = true) -> (status: Bool?, rejectionMessage: String?) {
+        toolStateBox.mutate { $0.resolveHostedMCPApprovalDecision(approvalItem, allowLegacyExact: allowLegacyExact) }
+    }
+
+    var allowLegacyApprovalBindingReconstruction: Bool {
+        toolStateBox.value.allowLegacyApprovalBindingReconstruction
+    }
+}
