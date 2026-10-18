@@ -228,6 +228,7 @@ func buildRunStateFromJSON(
     state.generatedPromptCacheKey = stateJSON.string("generated_prompt_cache_key")
     state.setToolUseTrackerSnapshot(toolUseTrackerSnapshot(from: stateJSON["tool_use_tracker"]))
     state.traceState = TraceState.fromJSON(stateJSON["trace"]?.objectValue)
+    try state.validateCompletedToolInvocations(reconstructLegacy: schema < (1, 15))
     return state
 }
 
@@ -297,6 +298,9 @@ private func restoreCurrentStep(_ state: RunState, _ stepData: JSONObject?, agen
         }
         let responseAccepted = data["response_accepted"]?.isTruthy ?? false
         state.currentStep = .interruption(interruptions: interruptions, responseAccepted: responseAccepted)
+        state.context.toolStateBox.mutate { context in
+            for item in interruptions { context.markRestoredUnboundPendingApproval(item) }
+        }
         state.llmEndHooksStarted = data["llm_end_hooks_started"]?.isTruthy ?? true
         if responseAccepted {
             state.clearGeneratedItemsLastProcessedMarker()

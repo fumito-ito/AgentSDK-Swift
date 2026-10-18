@@ -856,6 +856,52 @@ private func selectFunctionToolRunsForResume(
     return (approvedFunctions, rejectionItems, pendingInterruptions)
 }
 
+/// Keeps a resumed run's `RunState` current while tools finish, so a later failure (a hook, a
+/// guardrail, cancellation) does not lose outputs whose side effects already happened (upstream
+/// `_commit_tool_output` and `_checkpoint_new_items` in `resolve_interrupted_turn`).
+private final class ResumeCheckpoint: @unchecked Sendable {
+    private let runState: RunState?
+    private let originalPreStepItems: [RunItem]
+    private let contextWrapper: RunContextWrapper
+    private let callPositions: [String: Int]
+    private let committed = SharedBox<[RunItem]>([])
+
+    init(runState: RunState?, originalPreStepItems: [RunItem], response: ModelResponse, contextWrapper: RunContextWrapper) {
+        self.runState = runState
+        self.originalPreStepItems = originalPreStepItems
+        self.contextWrapper = contextWrapper
+        var positions: [String: Int] = [:]
+        for (index, output) in response.output.enumerated() {
+            if let callId = output.callIdOrId, positions[callId] == nil { positions[callId] = index }
+        }
+        self.callPositions = positions
+    }
+
+    private func position(_ item: RunItem) -> Int {
+        item.rawItem.string("call_id").flatMap { callPositions[$0] } ?? callPositions.count
+    }
+
+    /// Records one tool output in model order as soon as it exists.
+    func commitToolOutput(_ item: RunItem) {
+        committed.mutate { outputs in
+            guard !outputs.contains(where: { $0 === item }) else { return }
+            outputs.append(item)
+            // A stable sort keeps completion order among outputs without a known call position.
+            outputs = outputs.enumerated()
+                .sorted { (position($0.element), $0.offset) < (position($1.element), $1.offset) }
+                .map(\.element)
+            runState?.generatedItems = originalPreStepItems + outputs
+        }
+        contextWrapper.markToolCallCompleted(item.rawItem)
+    }
+
+    /// Writes the resumed turn's items so far and registers their outputs.
+    func checkpoint(_ newItems: [RunItem]) throws {
+        committed.mutate { _ in runState?.generatedItems = originalPreStepItems + newItems }
+        try registerToolCallItems(contextWrapper, newItems)
+    }
+}
+
 /// Resolves custom tool approvals whose call is no longer queued, for example because the restored
 /// agent no longer has the tool (upstream `_custom_reconciliation_approval`).
 ///
@@ -909,7 +955,8 @@ func resolveInterruptedTurn(
     contextWrapper: RunContextWrapper,
     runConfig: RunConfig,
     serverManagesConversation: Bool,
-    errorHandlers: RunErrorHandlers?
+    errorHandlers: RunErrorHandlers?,
+    runState: RunState? = nil
 ) async throws -> SingleStepResult {
     try registerToolCallItems(contextWrapper, originalPreStepItems, validateInvocations: false)
     var processedResponse = processedResponse
@@ -967,19 +1014,23 @@ func resolveInterruptedTurn(
     )
     let existingMCPResponses = Set(originalPreStepItems.compactMap { ($0 as? MCPApprovalResponseItem)?.rawItem.string("approval_request_id") })
     let mcpRequests = processedResponse.mcpApprovalRequests.filter { !existingMCPResponses.contains($0.requestItem.id) }
-    let manual = mcpRequests.filter { $0.mcpTool.onApprovalRequest == nil }
+    let (withCallback, manual) = partitionMCPApprovalRequests(mcpRequests)
     let (approvedMCP, pendingMCP) = try collectManualMCPApprovals(agent: agent, requests: manual, contextWrapper: contextWrapper, existingPendingByCallId: approvalItemsByCallId)
     plan.approvedMCPResponses = approvedMCP
     plan.pendingInterruptions.append(contentsOf: pendingMCP)
-    plan.mcpRequestsWithCallback = mcpRequests.filter { $0.mcpTool.onApprovalRequest != nil }
+    plan.mcpRequestsWithCallback = withCallback
 
-    let results = try await executeToolPlan(plan: plan, agent: agent, allTools: allTools, hooks: hooks, contextWrapper: contextWrapper, runConfig: runConfig)
+    let checkpoint = ResumeCheckpoint(runState: runState, originalPreStepItems: originalPreStepItems, response: newResponse, contextWrapper: contextWrapper)
+    let results = try await executeToolPlan(
+        plan: plan, agent: agent, allTools: allTools, hooks: hooks, contextWrapper: contextWrapper, runConfig: runConfig,
+        toolOutputCommitter: checkpoint.commitToolOutput
+    )
     var newStepItems: [RunItem] = rejectionItems + results.resultItems + plan.approvedMCPResponses
     var interruptions = results.interruptions + plan.pendingInterruptions
     newStepItems.append(contentsOf: plan.pendingInterruptions)
-    try registerToolCallItems(contextWrapper, newStepItems)
+    try checkpoint.checkpoint(newStepItems)
     newStepItems.append(contentsOf: try await executeMCPApprovalRequests(agent: agent, requests: plan.mcpRequestsWithCallback, contextWrapper: contextWrapper))
-    try registerToolCallItems(contextWrapper, newStepItems)
+    try checkpoint.checkpoint(newStepItems)
 
     var resumedProcessed = processedResponse
     resumedProcessed.interruptions = interruptions

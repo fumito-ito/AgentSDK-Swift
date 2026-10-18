@@ -969,7 +969,8 @@ private final class RunDriver: @unchecked Sendable {
             return try await resolveInterruptedTurn(
                 agent: agent, allTools: allTools, originalInput: originalInput, originalPreStepItems: generatedItems,
                 newResponse: lastResponse, processedResponse: processed, hooks: hooks, contextWrapper: contextWrapper,
-                runConfig: runConfig, serverManagesConversation: serverConversationTracker != nil, errorHandlers: errorHandlers
+                runConfig: runConfig, serverManagesConversation: serverConversationTracker != nil, errorHandlers: errorHandlers,
+                runState: runState
             )
         }
         toolUseTracker.recordProcessedResponse(currentAgent, processed)

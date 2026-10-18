@@ -103,7 +103,7 @@ import AgentsTesting
         case state(RunState)
     }
 
-    private final class ScriptedProvider: ModelProvider, @unchecked Sendable {
+    final class ScriptedProvider: ModelProvider, @unchecked Sendable {
         let model: ScriptedModel
         init(_ model: ScriptedModel) { self.model = model }
         func getModel(_ modelName: String?) throws -> any Model {
@@ -121,7 +121,7 @@ import AgentsTesting
         var state: () -> RunState
     }
 
-    private func run(
+    func run(
         _ agent: Agent,
         _ input: RunInputValue,
         runConfig: RunConfig = RunConfig(),
@@ -149,16 +149,16 @@ import AgentsTesting
         return RunOutcome(finalOutput: result.finalOutput, interruptions: result.interruptions, newItems: result.newItems, state: { result.toState() })
     }
 
-    private func toolCalledEventNames(_ events: SharedBox<[StreamEvent]>) -> [String] {
+    func toolCalledEventNames(_ events: SharedBox<[StreamEvent]>) -> [String] {
         events.value.compactMap { event in
             guard case .runItem(let item) = event, item.name == "tool_called" else { return nil }
             return item.name
         }
     }
 
-    private struct ValueArgs: Decodable, Sendable { var value: String }
+    struct ValueArgs: Decodable, Sendable { var value: String }
 
-    private func buildScenario(secondCallId: String, secondValue: String) throws -> (Agent, RunConfig, SharedBox<[String]>) {
+    func buildScenario(secondCallId: String, secondValue: String) throws -> (Agent, RunConfig, SharedBox<[String]>) {
         let executed = SharedBox<[String]>([])
         let recordValue = try FunctionTool.create(name: "record_value", argumentsType: ValueArgs.self, needsApproval: true) { _, args in
             executed.mutate { $0.append(args.value) }
@@ -268,7 +268,7 @@ import AgentsTesting
         #expect(handoffCalls.value.isEmpty)
     }
 
-    private final class FailingHandoffHooks: RunHooks, @unchecked Sendable {
+    final class FailingHandoffHooks: RunHooks, @unchecked Sendable {
         let hookCalls = SharedBox<[String]>([])
 
         override func onHandoff(context: RunContextWrapper, fromAgent: AgentBase, toAgent: AgentBase) async throws {
@@ -375,7 +375,7 @@ import AgentsTesting
         #expect(executed.value == ["safe"])
     }
 
-    private final class LLMEndRecordingHooks: RunHooks, @unchecked Sendable {
+    final class LLMEndRecordingHooks: RunHooks, @unchecked Sendable {
         let llmEndCalls = SharedBox(0)
 
         override func onLLMEnd(context: RunContextWrapper, agent: Agent, response: ModelResponse) async throws {
@@ -408,325 +408,5 @@ import AgentsTesting
         if mode == .streamed {
             #expect(toolCalledEventNames(events) == ["tool_called"])
         }
-    }
-
-    // MARK: - Native tools
-
-    @Test(arguments: ["custom", "function"])
-    func testCompletedApplyPatchFallbackRunStateRoundTrip(fallbackType: String) async throws {
-        let editor = RecordingEditor()
-        let tool = try ApplyPatchTool(editor: editor)
-        let operation = #"{"type": "update_file", "path": "safe.txt", "diff": "-old\\n+new\\n"}"#
-        let call: JSONObject = fallbackType == "custom"
-            ? ["type": "custom_tool_call", "name": "apply_patch", "call_id": "patch_0", "input": .string(operation)]
-            : ["type": "function_call", "name": "apply_patch", "call_id": "patch_0", "arguments": .string(operation)]
-        let model = try ScriptedModel(steps: [.output([call])])
-        try model.enqueue(.output([getTextMessage("done")]))
-        let agent = Agent(name: "agent", tools: [tool], model: .instance(model))
-
-        let result = try await Runner.run(agent, input: "update the file")
-        let restored = try await RunState.fromJSON(agent, try result.toState().toJSON())
-
-        #expect(result.finalOutput as? String == "done")
-        #expect(editor.operations.map(\.path) == ["safe.txt"])
-        #expect(restored.context.toolInvocations["patch_0"]?.completed == true)
-    }
-
-    @Test func testStreamedFunctionApplyPatchReplayEmitsOneToolCalledEvent() async throws {
-        let editor = RecordingEditor()
-        let operation = #"{"type": "update_file", "path": "safe.txt", "diff": "-old\\n+new\\n"}"#
-        let call: JSONObject = ["type": "function_call", "name": "apply_patch", "call_id": "patch_0", "arguments": .string(operation)]
-        let model = try ScriptedModel()
-        try model.extend([.output([call]), .output([call]), .output([getTextMessage("done")])])
-        let agent = Agent(name: "agent", tools: [try ApplyPatchTool(editor: editor)], model: .instance(model))
-        let events = SharedBox<[StreamEvent]>([])
-
-        let streamed = try await run(agent, .text("update the file"), mode: .streamed, events: events)
-
-        let toolCalled = events.value.compactMap { event -> RunItemStreamEvent? in
-            guard case .runItem(let item) = event, item.name == "tool_called" else { return nil }
-            return item
-        }
-        #expect(streamed.finalOutput as? String == "done")
-        #expect(editor.operations.map(\.path) == ["safe.txt"])
-        #expect(toolCalled.count == 1)
-        #expect(toolCalled.first.flatMap { ($0.item as? ToolCallItem)?.callId } == "patch_0")
-    }
-
-    @Test(arguments: [
-        (makeShellCall("call_0", commands: ["echo safe"]), "safe_shell", "other_shell"),
-        (makeApplyPatchDict("call_0"), "safe_patch", "other_patch"),
-    ])
-    func testNativeToolApprovalScopeRejectsResolvedToolReplacement(rawItem: JSONObject, firstToolName: String, replacementToolName: String) throws {
-        let context = RunContextWrapper(context: ())
-        let approvalItem = ToolApprovalItem(agent: Agent(name: "agent"), rawItem: rawItem, toolName: firstToolName)
-        try context.approveTool(approvalItem)
-
-        #expect(try context.approvedToolInvocationStatus(rawItem, toolName: firstToolName) != nil)
-        expectError(ModelBehaviorError.self, containing: "unique call ID") {
-            try context.approvedToolInvocationStatus(rawItem, toolName: replacementToolName)
-        }
-    }
-
-    private func recordingShell(_ name: String, needsApproval: Bool, executions: SharedBox<[String]>) throws -> ShellTool {
-        try ShellTool(
-            executor: { request in
-                executions.mutate { $0.append(contentsOf: request.data.action.commands) }
-                return .text("ok")
-            },
-            name: name,
-            needsApproval: .required(needsApproval)
-        )
-    }
-
-    @Test func testCustomNamedShellStickyApprovalAppliesToFreshCallIds() async throws {
-        let executed = SharedBox<[String]>([])
-        let model = try ScriptedModel()
-        try model.extend([
-            .output([makeShellCall("call_0", commands: ["echo first"])]),
-            .output([makeShellCall("call_1", commands: ["echo second"])]),
-            .output([getTextMessage("done")]),
-        ])
-        let agent = Agent(name: "agent", tools: [try recordingShell("safe_shell", needsApproval: true, executions: executed)], model: .instance(model))
-
-        let first = try await Runner.run(agent, input: "run commands")
-        let state = first.toState()
-        try state.approve(first.interruptions[0], alwaysApprove: true)
-        let resumed = try await Runner.run(agent, state: state)
-
-        #expect(resumed.finalOutput as? String == "done")
-        #expect(executed.value == ["echo first", "echo second"])
-    }
-
-    @Test func testCustomNamedShellReplacementRejectsCompletedCallIdReplay() async throws {
-        let firstExecutions = SharedBox<[String]>([])
-        let replacementExecutions = SharedBox<[String]>([])
-        let call = makeShellCall("call_0", commands: ["echo safe"])
-        let model = try ScriptedModel(steps: [.output([call])])
-        let agent = Agent(name: "agent", tools: [try recordingShell("safe_shell", needsApproval: true, executions: firstExecutions)], model: .instance(model))
-
-        let first = try await Runner.run(agent, input: "run command")
-        let state = first.toState()
-        try state.approve(first.interruptions[0])
-        try model.enqueue(.output([getTextMessage("done")]))
-        let completed = try await Runner.run(agent, state: state)
-
-        agent.tools = [try recordingShell("other_shell", needsApproval: false, executions: replacementExecutions)]
-        try model.enqueue(.output([call]))
-
-        await expectErrorAsync(ModelBehaviorError.self, containing: "unique call ID") {
-            _ = try await Runner.run(agent, state: completed.toState())
-        }
-
-        #expect(firstExecutions.value == ["echo safe"])
-        #expect(replacementExecutions.value.isEmpty)
-    }
-
-    @Test func testCancelledRejectionFormatterLeavesInvocationExecuted() async throws {
-        let toolCall: JSONObject = ["type": "function_call", "name": "approval_tool", "call_id": "call_rejected", "arguments": "{}"]
-        let context = RunContextWrapper(context: ())
-        #expect(
-            try context.toolInvocationStatus(toolCall)
-                == ToolInvocationStatus(invocationType: "function_call", callId: "call_rejected", completed: false, executed: false)
-        )
-        let formatterEntered = AsyncEvent()
-        let runConfig = RunConfig(toolErrorFormatter: { _ in
-            formatterEntered.set()
-            try await AsyncEvent().wait()
-            return "rejected"
-        })
-
-        let task = Task {
-            try await resolveApprovalRejectionMessage(
-                contextWrapper: context, runConfig: runConfig, toolType: "function",
-                toolName: "approval_tool", callId: "call_rejected", toolCall: toolCall
-            )
-        }
-        try await formatterEntered.wait()
-        task.cancel()
-        _ = try? await task.value
-
-        #expect(
-            try context.toolInvocationStatus(toolCall)
-                == ToolInvocationStatus(invocationType: "function_call", callId: "call_rejected", completed: false, executed: true)
-        )
-    }
-
-    // MARK: - Execution lifecycle
-
-    private final class FailingLLMEndHooks: RunHooks, @unchecked Sendable {
-        override func onLLMEnd(context: RunContextWrapper, agent: Agent, response: ModelResponse) async throws {
-            throw TestError("llm end failed")
-        }
-    }
-
-    @Test func testStreamedValidatedItemsPrecedeLLMEndHookFailure() async throws {
-        let executed = SharedBox<[String]>([])
-        let events = SharedBox<[StreamEvent]>([])
-        let recordValue = try FunctionTool.create(name: "record_value", argumentsType: ValueArgs.self) { _, args in
-            executed.mutate { $0.append(args.value) }
-            return args.value
-        }
-        let model = try ScriptedModel(steps: [.output([getFunctionToolCall("record_value", arguments: #"{"value":"safe"}"#, callId: "call_0")])])
-        let agent = Agent(name: "agent", tools: [recordValue], model: .instance(model))
-
-        await expectErrorAsync(TestError.self, containing: "llm end failed") {
-            _ = try await run(agent, .text("record a value"), mode: .streamed, hooks: FailingLLMEndHooks(), events: events)
-        }
-
-        let names = events.value.compactMap { event -> String? in
-            if case .runItem(let item) = event { return item.name }
-            return nil
-        }
-        #expect(names == ["tool_called"])
-        #expect(executed.value.isEmpty)
-    }
-
-    @Test func testNonApprovalFailedToolBodyDoesNotReexecute() async throws {
-        let attempts = SharedBox<[String]>([])
-        let performSideEffect = try FunctionTool.create(name: "perform_side_effect", failureErrorFunction: .none) { _ -> String in
-            attempts.mutate { $0.append("ran") }
-            throw TestError("failed after side effect")
-        }
-        let call = getFunctionToolCall("perform_side_effect", arguments: "{}", callId: "call_0")
-        let model = try ScriptedModel()
-        try model.extend([.output([call]), .output([call])])
-        let agent = Agent(name: "agent", tools: [performSideEffect], model: .instance(model))
-        let context = RunContextWrapper(context: ())
-
-        await expectErrorAsync(UserError.self, containing: "failed after side effect") {
-            _ = try await Runner.run(agent, input: "run it", context: context)
-        }
-        await expectErrorAsync(ModelBehaviorError.self, containing: "already executed") {
-            _ = try await Runner.run(agent, input: "run it", context: context)
-        }
-
-        #expect(attempts.value == ["ran"])
-    }
-
-    @Test func testNonApprovalCustomToolIdenticalSiblingsExecuteOnce() async throws {
-        let executed = SharedBox<[String]>([])
-        let tool = try CustomTool(
-            name: "raw_editor",
-            description: "Edit raw text.",
-            onInvokeTool: { _, value in
-                executed.mutate { $0.append(value) }
-                return value
-            },
-            format: ["type": "text"]
-        )
-        let duplicate: JSONObject = ["type": "custom_tool_call", "name": .string(tool.name), "call_id": "call_0", "input": "safe"]
-        let model = try ScriptedModel(steps: [.output([duplicate, duplicate])])
-        try model.enqueue(.output([getTextMessage("done")]))
-        let agent = Agent(name: "agent", tools: [tool], model: .instance(model))
-
-        let result = try await Runner.run(agent, input: "edit text")
-
-        #expect(result.finalOutput as? String == "done")
-        #expect(executed.value == ["safe"])
-    }
-
-    // Swift: test_approved_custom_tool_resume_rebinds_to_current_tool and
-    // test_approved_custom_tool_resume_fails_when_current_tool_is_missing need resume-time
-    // reconciliation against the current tool inventory, which is not ported yet
-    // (porting/manifest.json).
-
-    @Test func testApprovedApplyPatchCustomResumeUsesPublicTool() async throws {
-        let editor = RecordingEditor()
-        let tool = try ApplyPatchTool(editor: editor, needsApproval: .required(true))
-        let call: JSONObject = [
-            "type": "custom_tool_call",
-            "name": "apply_patch",
-            "call_id": "patch_0",
-            "input": #"{"type": "update_file", "path": "safe.txt", "diff": "-old\\n+new\\n"}"#,
-        ]
-        let model = try ScriptedModel(steps: [.output([call]), .output([getTextMessage("done")])])
-        let agent = Agent(name: "agent", tools: [tool], model: .instance(model))
-
-        let first = try await Runner.run(agent, input: "update the file")
-        let state = first.toState()
-        try state.approve(state.getInterruptions()[0])
-
-        let resumed = try await Runner.run(agent, state: state)
-
-        #expect(resumed.finalOutput as? String == "done")
-        #expect(editor.operations.map(\.path) == ["safe.txt"])
-    }
-
-    private func rawEditor(needsApproval: Bool, executed: SharedBox<[String]>) throws -> CustomTool {
-        try CustomTool(
-            name: "raw_editor",
-            description: "Edit raw text.",
-            onInvokeTool: { _, value in
-                executed.mutate { $0.append(value) }
-                return value
-            },
-            format: ["type": "text"],
-            needsApproval: .required(needsApproval)
-        )
-    }
-
-    @Test func testPendingCustomToolResumeSurvivesMissingCurrentTool() async throws {
-        let executed = SharedBox<[String]>([])
-        let call: JSONObject = ["type": "custom_tool_call", "name": "raw_editor", "call_id": "call_0", "input": "safe"]
-        let agent = Agent(name: "agent", tools: [try rawEditor(needsApproval: true, executed: executed)], model: .instance(try ScriptedModel(steps: [.output([call])])))
-
-        let first = try await Runner.run(agent, input: "edit")
-        let state = first.toState()
-        agent.tools = []
-
-        let resumed = try await Runner.run(agent, state: state)
-
-        #expect(resumed.interruptions.count == 1)
-        #expect(executed.value.isEmpty)
-    }
-
-    @Test(arguments: [false, true])
-    func testRejectedCustomToolResumeEmitsOutputWhenCurrentToolIsMissing(serializeState: Bool) async throws {
-        let executed = SharedBox<[String]>([])
-        let call: JSONObject = ["type": "custom_tool_call", "name": "raw_editor", "call_id": "call_0", "input": "safe"]
-        let model = try ScriptedModel(steps: [.output([call]), .output([getTextMessage("done")])])
-        let agent = Agent(name: "agent", tools: [try rawEditor(needsApproval: true, executed: executed)], model: .instance(model))
-
-        let first = try await Runner.run(agent, input: "edit text")
-        var state = first.toState()
-        try state.reject(state.getInterruptions()[0])
-        agent.tools = []
-        if serializeState {
-            state = try await RunState.fromJSON(agent, try state.toJSON())
-        }
-
-        let resumed = try await Runner.run(agent, state: state)
-
-        #expect(resumed.finalOutput as? String == "done")
-        #expect(executed.value.isEmpty)
-        let modelInput = try #require(model.calls.last?.input.inputItems)
-        let rejectionOutputs = modelInput.filter { $0.string("type") == "custom_tool_call_output" && $0.string("call_id") == "call_0" }
-        #expect(rejectionOutputs.count == 1)
-    }
-
-    @Test(arguments: RunMode.allCases)
-    func testChangedSameIdSiblingsFailBeforeApprovalCallback(mode: RunMode) async throws {
-        let approvalCalls = SharedBox<[String]>([])
-        let recordValue = try FunctionTool.create(
-            name: "record_value",
-            argumentsType: ValueArgs.self,
-            needsApproval: .dynamic { _, arguments, _ in
-                approvalCalls.mutate { $0.append(arguments.string("value") ?? "") }
-                return true
-            }
-        ) { _, args in args.value }
-        let siblings = [
-            getFunctionToolCall("record_value", arguments: #"{"value":"one"}"#, callId: "call_0"),
-            getFunctionToolCall("record_value", arguments: #"{"value":"two"}"#, callId: "call_0"),
-        ]
-        let model = try ScriptedModel(steps: [.output(siblings)])
-        let agent = Agent(name: "agent", tools: [recordValue], model: .instance(model))
-
-        await expectErrorAsync(ModelBehaviorError.self, containing: "one response") {
-            _ = try await run(agent, .text("record values"), mode: mode)
-        }
-
-        #expect(approvalCalls.value.isEmpty)
     }
 }

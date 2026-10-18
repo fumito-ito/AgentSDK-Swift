@@ -40,6 +40,10 @@ private func callHooks(
     }
 }
 
+/// Receives each tool output as soon as it exists, so a checkpoint keeps outputs whose later hooks
+/// fail (upstream `tool_output_committer`).
+typealias ToolOutputCommitter = @Sendable (RunItem) -> Void
+
 /// Builds an approval item, runs the `onApproval` hook if needed, and returns the latest status.
 func resolveApprovalStatus(
     toolName: String,
@@ -110,7 +114,8 @@ enum ComputerAction {
         hooks: RunHooks,
         contextWrapper: RunContextWrapper,
         config: RunConfig,
-        acknowledgedSafetyChecks: [JSONObject]? = nil
+        acknowledgedSafetyChecks: [JSONObject]? = nil,
+        toolOutputCommitter: ToolOutputCommitter? = nil
     ) async throws -> RunItem {
         try await withToolFunctionSpan(config: config, toolName: action.computerTool.traceName) { span in
             if let span, config.traceIncludeSensitiveData {
@@ -140,6 +145,7 @@ enum ComputerAction {
                 raw["acknowledged_safety_checks"] = .array(acknowledgedSafetyChecks.map(JSONValue.object))
             }
             let item = ToolCallOutputItem(agent: agent, rawItem: raw, output: imageURL)
+            toolOutputCommitter?(item)
             try await callHooks(hooks, agent, context: contextWrapper, tool: action.computerTool, start: false, result: output)
             if let span, config.traceIncludeSensitiveData {
                 span.data(as: FunctionSpanData.self)?.output = imageURL
@@ -202,12 +208,20 @@ enum ComputerAction {
 // MARK: - Local shell
 
 enum LocalShellAction {
-    static func execute(agent: Agent, call: ToolRunLocalShellCall, hooks: RunHooks, contextWrapper: RunContextWrapper, config: RunConfig) async throws -> RunItem {
+    static func execute(
+        agent: Agent,
+        call: ToolRunLocalShellCall,
+        hooks: RunHooks,
+        contextWrapper: RunContextWrapper,
+        config: RunConfig,
+        toolOutputCommitter: ToolOutputCommitter? = nil
+    ) async throws -> RunItem {
         try contextWrapper.markToolInvocationExecuted(call.toolCall.json, toolName: call.localShellTool.name)
         try await callHooks(hooks, agent, context: contextWrapper, tool: call.localShellTool, start: true)
         let result = try await call.localShellTool.executor(LocalShellCommandRequest(ctxWrapper: contextWrapper, data: call.toolCall))
         let raw: JSONObject = ["type": "local_shell_call_output", "call_id": .string(call.toolCall.callId), "output": .string(result)]
         let item = ToolCallOutputItem(agent: agent, rawItem: raw, output: result)
+        toolOutputCommitter?(item)
         try await callHooks(hooks, agent, context: contextWrapper, tool: call.localShellTool, start: false, result: result)
         return item
     }
@@ -349,7 +363,14 @@ extension String {
 }
 
 enum ShellAction {
-    static func execute(agent: Agent, call: ToolRunShellCall, hooks: RunHooks, contextWrapper: RunContextWrapper, config: RunConfig) async throws -> RunItem {
+    static func execute(
+        agent: Agent,
+        call: ToolRunShellCall,
+        hooks: RunHooks,
+        contextWrapper: RunContextWrapper,
+        config: RunConfig,
+        toolOutputCommitter: ToolOutputCommitter? = nil
+    ) async throws -> RunItem {
         let shellCall = try coerceShellCall(call.toolCall)
         let shellTool = call.shellTool
         let currentItem = ToolApprovalItem(agent: agent, rawItem: call.toolCall, toolName: shellTool.name)
@@ -453,6 +474,7 @@ enum ShellAction {
             if let rawEntries { raw["shell_output"] = .array(rawEntries.map(JSONValue.object)) }
             if let providerMeta, !providerMeta.isEmpty { raw["provider_data"] = .object(providerMeta) }
             let item = ToolCallOutputItem(agent: agent, rawItem: raw, output: outputText)
+            toolOutputCommitter?(item)
             try await callHooks(hooks, agent, context: contextWrapper, tool: shellTool, start: false, result: outputText)
             if let span, config.traceIncludeSensitiveData {
                 span.data(as: FunctionSpanData.self)?.output = outputText
@@ -547,7 +569,14 @@ private func coerceApplyPatchOperationPayload(_ raw: JSONValue, contextWrapper: 
 }
 
 enum ApplyPatchAction {
-    static func execute(agent: Agent, call: ToolRunApplyPatchCall, hooks: RunHooks, contextWrapper: RunContextWrapper, config: RunConfig) async throws -> RunItem {
+    static func execute(
+        agent: Agent,
+        call: ToolRunApplyPatchCall,
+        hooks: RunHooks,
+        contextWrapper: RunContextWrapper,
+        config: RunConfig,
+        toolOutputCommitter: ToolOutputCommitter? = nil
+    ) async throws -> RunItem {
         let tool = call.applyPatchTool
         let operations = try coerceApplyPatchOperations(call.toolCall, contextWrapper: contextWrapper)
         guard let callId = call.toolCall.string("call_id"), !callId.isEmpty else {
@@ -623,6 +652,7 @@ enum ApplyPatchAction {
             if !outputText.isEmpty { raw["output"] = .string(outputText) }
             ItemHelpers.copyToolCallCaller(call.toolCall, into: &raw)
             let item = ToolCallOutputItem(agent: agent, rawItem: raw, output: outputText)
+            toolOutputCommitter?(item)
             try await callHooks(hooks, agent, context: contextWrapper, tool: tool, start: false, result: outputText)
             if let span, config.traceIncludeSensitiveData {
                 span.data(as: FunctionSpanData.self)?.output = outputText
@@ -635,7 +665,14 @@ enum ApplyPatchAction {
 // MARK: - Custom tools
 
 enum CustomToolAction {
-    static func execute(agent: Agent, call: ToolRunCustom, hooks: RunHooks, contextWrapper: RunContextWrapper, config: RunConfig) async throws -> RunItem {
+    static func execute(
+        agent: Agent,
+        call: ToolRunCustom,
+        hooks: RunHooks,
+        contextWrapper: RunContextWrapper,
+        config: RunConfig,
+        toolOutputCommitter: ToolOutputCommitter? = nil
+    ) async throws -> RunItem {
         let tool = call.customTool
         guard let callId = call.toolCall.json.string("call_id"), !callId.isEmpty else {
             throw ModelBehaviorError("Custom tool call is missing a non-empty call_id.")
@@ -694,6 +731,7 @@ enum CustomToolAction {
                 logActionError("Custom tool failed", error, isToolAction: true)
             }
             let item = outputItem(outputText)
+            toolOutputCommitter?(item)
             try await callHooks(hooks, agent, context: toolContext, tool: tool, start: false, result: outputText)
             if let span, config.traceIncludeSensitiveData {
                 span.data(as: FunctionSpanData.self)?.output = outputText
