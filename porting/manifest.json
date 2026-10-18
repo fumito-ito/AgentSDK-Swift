@@ -42,9 +42,9 @@
       "notes": ""
     },
     "src/agents/_public_agent.py": {
-      "status": "pending",
+      "status": "skipped",
       "swift": [],
-      "notes": ""
+      "notes": "Only sandbox execution clones set a public agent, and sandbox is out of scope (D2); approvals use the item's agent."
     },
     "src/agents/_run_state_agent_identity.py": {
       "status": "ported",
@@ -3226,9 +3226,11 @@
       "notes": ""
     },
     "tests/test_agent_scoped_approvals.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/AgentScopedApprovalsTests.swift"
+      ],
+      "notes": "Skipped: pydantic/Temporal context converter round trips and the sandbox operation case. Runner cases that convert the context are ported with the wrapper reused directly; the copy.copy owner case has no Swift equivalent."
     },
     "tests/test_agent_tool_enablement_snapshot.py": {
       "status": "pending",
@@ -3771,9 +3773,10 @@
         "Tests/AgentsTests/RunStateTests+Resumption.swift",
         "Tests/AgentsTests/RunStateTests+SerializationEdgeCases.swift",
         "Tests/AgentsTests/RunStateTests+SchemaEdgeCases.swift",
-        "Tests/AgentsTests/RunStateTests+ToolApprovalItem.swift"
+        "Tests/AgentsTests/RunStateTests+ToolApprovalItem.swift",
+        "Tests/AgentsTests/RunStateTests+InvocationLedger.swift"
       ],
-      "notes": "Pending until their modules are ported: tool invocation ledger and hosted MCP query approval cases, nested agent-tool state cases (agent_tool_state.py), programmatic tool calling resume checks (tool_caller.py), and nested history ownership round trips. Skipped: pydantic/deepcopy snapshot cases, Python truthiness, bare string input items, ad-hoc tool attributes, and sandbox cases (out of scope). Each file lists the cases at its top."
+      "notes": "Pending until their modules are ported: nested agent-tool state cases (agent_tool_state.py), programmatic tool calling resume checks (tool_caller.py), and nested history ownership round trips. Skipped: pydantic/deepcopy snapshot cases, Python truthiness, bare string input items, ad-hoc tool attributes, and sandbox cases (out of scope). Each file lists the cases at its top."
     },
     "tests/test_run_state_agent_identity.py": {
       "status": "ported",
