@@ -275,10 +275,26 @@ extension JSONValue {
 
     /// Serializes like Python's `json.dumps(value)` with default separators (`", "` and `": "`)
     /// and `ensure_ascii=True`; `sortedKeys` matches `sort_keys=True`.
-    public func pythonJSONString(sortedKeys: Bool = false) -> String {
+    ///
+    /// `compact` matches `separators=(",", ":")` and `ensureASCII: false` matches
+    /// `ensure_ascii=False`.
+    public func pythonJSONString(sortedKeys: Bool = false, compact: Bool = false, ensureASCII: Bool = true) -> String {
         var output = ""
-        JSONValue.writePython(self, into: &output, sortedKeys: sortedKeys)
+        let format = PythonJSONFormat(
+            sortedKeys: sortedKeys,
+            itemSeparator: compact ? "," : ", ",
+            keySeparator: compact ? ":" : ": ",
+            asciiOnly: ensureASCII
+        )
+        JSONValue.writePython(self, into: &output, format: format)
         return output
+    }
+
+    private struct PythonJSONFormat {
+        var sortedKeys: Bool
+        var itemSeparator: String
+        var keySeparator: String
+        var asciiOnly: Bool
     }
 
     private static func write(_ value: JSONValue, into output: inout String, sortedKeys: Bool, pretty: Bool, indent: Int) {
@@ -325,28 +341,28 @@ extension JSONValue {
         }
     }
 
-    private static func writePython(_ value: JSONValue, into output: inout String, sortedKeys: Bool) {
+    private static func writePython(_ value: JSONValue, into output: inout String, format: PythonJSONFormat) {
         switch value {
         case .array(let array):
             output += "["
             for (index, element) in array.enumerated() {
-                if index > 0 { output += ", " }
-                writePython(element, into: &output, sortedKeys: sortedKeys)
+                if index > 0 { output += format.itemSeparator }
+                writePython(element, into: &output, format: format)
             }
             output += "]"
         case .object(let object):
             output += "{"
             // Python sorts keys by code point.
-            let keys = sortedKeys ? object.keys.sorted { $0.unicodeScalars.lexicographicallyPrecedes($1.unicodeScalars) } : object.keys
+            let keys = format.sortedKeys ? object.keys.sorted { $0.unicodeScalars.lexicographicallyPrecedes($1.unicodeScalars) } : object.keys
             for (index, key) in keys.enumerated() {
-                if index > 0 { output += ", " }
-                output += escape(key, asciiOnly: true)
-                output += ": "
-                writePython(object[key] ?? .null, into: &output, sortedKeys: sortedKeys)
+                if index > 0 { output += format.itemSeparator }
+                output += escape(key, asciiOnly: format.asciiOnly)
+                output += format.keySeparator
+                writePython(object[key] ?? .null, into: &output, format: format)
             }
             output += "}"
         case .string(let string):
-            output += escape(string, asciiOnly: true)
+            output += escape(string, asciiOnly: format.asciiOnly)
         default:
             write(value, into: &output, sortedKeys: false, pretty: false, indent: 0)
         }

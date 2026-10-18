@@ -47,9 +47,6 @@ private let pendingFeatures: [String: String] = [
     "duplicate_agent_identity_and_sandbox": "sandbox resume state is out of scope (D2)",
     "docker_labels": "sandbox resume state is out of scope (D2)",
     "nested_history_ownership": "RunState does not retain nested history ownership yet",
-    "hosted_mcp_approval_scope": "hosted MCP query approval records are not ported yet",
-    "canonical_invocation_identity": "the tool invocation ledger is not ported yet",
-    "per_call_approval_override": "the tool invocation ledger and sticky approval scopes are not ported yet",
 ]
 
 /// Removes the schema version, the only field a rewrite may change.
@@ -316,7 +313,6 @@ private func validateHistoricalResumeBehavior(_ relativePath: String, feature: S
         #expect(restored.context === context)
         #expect(context.context(as: JSONObject.self) == ["custom": true])
         #expect(context.toolInput as? JSONValue == ["durable": "expected"])
-        // Swift: upstream also asserts the restored `_tool_invocations` ledger, which is not
-        // ported yet.
+        #expect(!context.toolInvocations.isEmpty)
     }
 }

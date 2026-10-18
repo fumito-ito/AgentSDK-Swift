@@ -432,7 +432,7 @@ private let helloMessage: JSONValue = [
         #expect(resolved === state.context)
         #expect(resolved.context(as: JSONObject.self) == override)
         #expect(resolved.usageBox === restoredWrapper.usageBox)
-        #expect(resolved.approvalsBox === restoredWrapper.approvalsBox)
+        #expect(resolved.toolStateBox === restoredWrapper.toolStateBox)
         #expect(resolved.approvals["needs_ok"]?.approved == .callIds(["1"]))
         #expect(resolved.turnInput == [["role": "user", "content": "hi"]])
         #expect(resolved.toolInput as? JSONObject == ["scoped": true])
@@ -494,7 +494,7 @@ private let helloMessage: JSONValue = [
         #expect(result.contextWrapper === restoredWrapper)
         #expect(result.contextWrapper.context(as: JSONObject.self) == override)
         #expect(result.contextWrapper.toolInput as? JSONValue == ["scoped": true])
-        #expect(result.contextWrapper.approvalsBox === restoredWrapper.approvalsBox)
+        #expect(result.contextWrapper.toolStateBox === restoredWrapper.toolStateBox)
     }
 }
 

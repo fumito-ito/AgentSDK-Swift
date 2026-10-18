@@ -45,7 +45,7 @@ public final class ToolContext: RunContextWrapper, @unchecked Sendable {
         super.init(
             context: context,
             usageBox: SharedBox(usage),
-            approvalsBox: SharedBox([:]),
+            toolStateBox: SharedBox(ToolApprovalState()),
             turnInput: turnInput,
             toolInput: toolInput
         )
@@ -71,7 +71,7 @@ public final class ToolContext: RunContextWrapper, @unchecked Sendable {
         super.init(
             context: wrapper.context,
             usageBox: wrapper.usageBox,
-            approvalsBox: wrapper.approvalsBox,
+            toolStateBox: wrapper.toolStateBox,
             turnInput: wrapper.turnInput,
             toolInput: wrapper.toolInput
         )

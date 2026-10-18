@@ -105,8 +105,7 @@ extension RunState {
         var contextEntry: JSONObject = [
             "usage": .object(serializeUsage(context.usage)),
             "approvals": .object(serializeApprovals()),
-            // Swift: the canonical tool invocation ledger is not ported yet, so it is always empty.
-            "tool_invocations": [:],
+            "tool_invocations": .object(serializeToolInvocations()),
             "context": contextPayload,
             // Preserve metadata so deserialization can warn when context types were erased.
             "context_meta": .object(contextMeta),
@@ -117,6 +116,10 @@ extension RunState {
         let hostedApprovals = serializeHostedMCPApprovals()
         if !hostedApprovals.isEmpty {
             contextEntry["hosted_mcp_approvals"] = .array(hostedApprovals)
+        }
+        let functionToolApprovals = serializeFunctionToolApprovals(identityKeys)
+        if !functionToolApprovals.isEmpty {
+            contextEntry["function_tool_approvals"] = .array(functionToolApprovals)
         }
 
         let generatedItems = mergeGeneratedItemsWithProcessed()
@@ -231,20 +234,63 @@ extension RunState {
 
     // MARK: Approvals
 
-    /// Serializes legacy and non-hosted approval records.
+    /// Serializes legacy and non-function approval records keyed by tool name.
     func serializeApprovals() -> JSONObject {
         var serialized = JSONObject()
-        for (key, record) in context.approvals.sorted(by: { $0.key < $1.key }) where hostedMCPApprovalIdentity(key) == nil {
+        let named = context.approvals.compactMap { key, record in key.nameValue.map { ($0, record) } }
+        for (key, record) in named.sorted(by: { $0.0 < $1.0 }) {
             serialized[key] = .object(record.json)
+        }
+        return serialized
+    }
+
+    /// Serializes agent-owned decisions using the same identities as pending items.
+    func serializeFunctionToolApprovals(_ identityKeys: [ObjectIdentifier: String]) -> [JSONValue] {
+        let ambiguousOwners = getAmbiguousAgentIds(startingAgent)
+        var entries: [(owner: String, toolKey: String, entry: JSONObject)] = []
+        for (key, record) in context.approvals {
+            guard case .function(let functionKey) = key, let owner = functionKey.owner else { continue }
+            let ownerId = ObjectIdentifier(owner)
+            // Only uniquely identifiable owners in this graph can carry approval authority into a
+            // checkpoint.
+            guard let identity = identityKeys[ownerId], !ambiguousOwners.contains(ownerId) else { continue }
+            let entry: JSONObject = [
+                "agent": .object(serializeAgentReference(owner, identityKeys)),
+                "tool_key": .string(functionKey.toolKey),
+                "decision": .object(record.json),
+            ]
+            entries.append((identity, functionKey.toolKey, entry))
+        }
+        // Swift: upstream keeps decision order; dictionaries here are unordered, so entries are
+        // sorted for deterministic output.
+        return entries.sorted { ($0.owner, $0.toolKey) < ($1.owner, $1.toolKey) }.map { .object($0.entry) }
+    }
+
+    /// Serializes the run-owned canonical tool invocation ledger.
+    func serializeToolInvocations() -> JSONObject {
+        var serialized = JSONObject()
+        for (callId, invocation) in context.toolInvocations.sorted(by: { $0.key < $1.key }) {
+            serialized[callId] = .object(invocation.json)
         }
         return serialized
     }
 
     /// Serializes hosted MCP approvals with explicit typed identities.
     func serializeHostedMCPApprovals() -> [JSONValue] {
-        context.approvals.sorted(by: { $0.key < $1.key }).compactMap { key, record in
-            guard let identity = hostedMCPApprovalIdentity(key) else { return nil }
-            return ["identity": .object(identity), "decision": .object(record.json)]
+        let hosted = context.approvals.compactMap { key, record -> (sortKey: [String], identity: JSONObject, record: ApprovalRecord)? in
+            switch key {
+            case .hostedMCP(let serverLabel, let toolName):
+                return (["hosted_mcp", serverLabel, toolName], ["type": "server_tool", "server_label": .string(serverLabel), "tool_name": .string(toolName)], record)
+            case .hostedMCPCall(let requestId):
+                return (["hosted_mcp_call", requestId], ["type": "request", "request_id": .string(requestId)], record)
+            case .hostedMCPQuery(let toolName, let requestId):
+                return (["hosted_mcp_query", toolName, requestId], ["type": "query", "tool_name": .string(toolName), "request_id": .string(requestId)], record)
+            case .name, .function:
+                return nil
+            }
+        }
+        return hosted.sorted { $0.sortKey.lexicographicallyPrecedes($1.sortKey) }.map {
+            ["identity": .object($0.identity), "decision": .object($0.record.json)]
         }
     }
 
@@ -550,22 +596,6 @@ private func buildContextMeta(_ original: any Sendable, serializedVia: String, r
         meta["class_path"] = .string(classPath)
     }
     return meta
-}
-
-/// Returns the typed identity for a hosted MCP approval key, or `nil` for other keys.
-///
-/// Swift: approval records are keyed by strings, so hosted MCP identities are encoded as
-/// `hosted_mcp:<server_label>:<tool_name>` and `hosted_mcp_call:<request_id>`.
-func hostedMCPApprovalIdentity(_ key: String) -> JSONObject? {
-    if key.hasPrefix("hosted_mcp_call:") {
-        return ["type": "request", "request_id": .string(String(key.dropFirst("hosted_mcp_call:".count)))]
-    }
-    if key.hasPrefix("hosted_mcp:") {
-        let parts = key.split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false)
-        guard parts.count == 3 else { return nil }
-        return ["type": "server_tool", "server_label": .string(String(parts[1])), "tool_name": .string(String(parts[2]))]
-    }
-    return nil
 }
 
 /// Serializes an agent reference with an optional duplicate-name identity key.

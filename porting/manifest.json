@@ -61,9 +61,11 @@
       "notes": ""
     },
     "src/agents/_tool_invocation.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/ToolInvocation.swift"
+      ],
+      "notes": "Digests hash the same text as upstream, so Python-written invocation ledgers validate in Swift."
     },
     "src/agents/agent.py": {
       "status": "partial",
@@ -816,9 +818,10 @@
     "src/agents/run_context.py": {
       "status": "partial",
       "swift": [
-        "Sources/Agents/RunContext.swift"
+        "Sources/Agents/RunContext.swift",
+        "Sources/Agents/RunContextApprovals.swift"
       ],
-      "notes": "Approval candidate keys simplified; agent-scoped approval owners not ported."
+      "notes": "Approval records, agent-owned function keys, hosted MCP typed keys, and the invocation ledger are ported (D16). Skipped: detached owner keys for pydantic/Temporal context converters. Pending: agent_tool_state scope on checkpoint copies."
     },
     "src/agents/run_error_handlers.py": {
       "status": "ported",
@@ -3701,9 +3704,11 @@
       "notes": "Sandbox and dict-only cases skipped."
     },
     "tests/test_run_context_approvals.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/RunContextApprovalsTests.swift"
+      ],
+      "notes": "The non-string approval key case is dropped because JSON object keys are strings."
     },
     "tests/test_run_context_wrapper.py": {
       "status": "ported",
@@ -3907,9 +3912,11 @@
       "notes": "pytest environment checks."
     },
     "tests/test_tool_approval_call_id_reuse.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/ToolApprovalCallIdReuseTests.swift"
+      ],
+      "notes": "Canonical identity cases ported; pydantic model_dump cases skipped. Runner integration cases are ported with the runtime ledger integration."
     },
     "tests/test_tool_choice_reset.py": {
       "status": "ported",
