@@ -6,8 +6,7 @@ import AgentsTesting
 // Ported from tests/test_agent_runner.py.
 //
 // Swift: blocked-output replacement, sandbox memory, OpenAI Conversations sessions, and
-// `SQLiteSession` cases are pending their ports. `RunState.to_string()` / `from_string()` round
-// trips are replaced by in-memory `toState()` resumes until RunState serialization is ported.
+// `SQLiteSession` cases are pending their ports.
 @Suite struct AgentRunnerTests {
     private func findReasoningInputItem(_ items: [TResponseInputItem]) -> TResponseInputItem? {
         items.first { $0.string("type") == "reasoning" }
@@ -225,7 +224,7 @@ import AgentsTesting
         #expect(replayed["id"] == nil)
     }
 
-    @Test func testResumedRunUsesReasoningItemIdPolicy() async throws {
+    @Test func testResumedRunUsesSerializedReasoningItemIdPolicy() async throws {
         let model = try ScriptedModel()
         let approvalTool = try FunctionTool.create(name: "approval_tool", needsApproval: .always) { _ in "ok" }
         let agent = Agent(name: "test", tools: [approvalTool], model: .instance(model))
@@ -239,7 +238,9 @@ import AgentsTesting
 
         let state = firstRun.toState()
         try state.approve(firstRun.interruptions[0])
-        let resumed = try await Runner.run(agent, state: state)
+        let restoredState = try await RunState.fromString(agent, try state.toString())
+
+        let resumed = try await Runner.run(agent, state: restoredState)
 
         #expect(resumed.finalOutput as? String == "done")
         let secondRequestReasoning = try #require(findReasoningInputItem(model.calls.last?.input))
@@ -320,7 +321,9 @@ import AgentsTesting
 
         let state = first.toState()
         try state.approve(first.interruptions[0])
-        let resumed = try await Runner.run(agent, state: state, runConfig: runConfig)
+        let restoredState = try await RunState.fromString(agent, try state.toString())
+
+        let resumed = try await Runner.run(agent, state: restoredState, runConfig: runConfig)
 
         #expect(resumed.finalOutput as? String == "done")
         #expect(guardrailRuns.value == 2)

@@ -274,10 +274,10 @@ extension JSONValue {
     }
 
     /// Serializes like Python's `json.dumps(value)` with default separators (`", "` and `": "`)
-    /// and `ensure_ascii=True`.
-    public func pythonJSONString() -> String {
+    /// and `ensure_ascii=True`; `sortedKeys` matches `sort_keys=True`.
+    public func pythonJSONString(sortedKeys: Bool = false) -> String {
         var output = ""
-        JSONValue.writePython(self, into: &output)
+        JSONValue.writePython(self, into: &output, sortedKeys: sortedKeys)
         return output
     }
 
@@ -325,22 +325,24 @@ extension JSONValue {
         }
     }
 
-    private static func writePython(_ value: JSONValue, into output: inout String) {
+    private static func writePython(_ value: JSONValue, into output: inout String, sortedKeys: Bool) {
         switch value {
         case .array(let array):
             output += "["
             for (index, element) in array.enumerated() {
                 if index > 0 { output += ", " }
-                writePython(element, into: &output)
+                writePython(element, into: &output, sortedKeys: sortedKeys)
             }
             output += "]"
         case .object(let object):
             output += "{"
-            for (index, key) in object.keys.enumerated() {
+            // Python sorts keys by code point.
+            let keys = sortedKeys ? object.keys.sorted { $0.unicodeScalars.lexicographicallyPrecedes($1.unicodeScalars) } : object.keys
+            for (index, key) in keys.enumerated() {
                 if index > 0 { output += ", " }
                 output += escape(key, asciiOnly: true)
                 output += ": "
-                writePython(object[key] ?? .null, into: &output)
+                writePython(object[key] ?? .null, into: &output, sortedKeys: sortedKeys)
             }
             output += "}"
         case .string(let string):

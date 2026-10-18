@@ -180,40 +180,30 @@ final class AgentToolUseTracker: @unchecked Sendable {
         return snapshot.mapValues { $0.sorted() }
     }
 
-    /// Restores tracked usage from a serialized snapshot, resolving agent names from `startingAgent`.
-    func hydrate(from snapshot: [String: [String]], startingAgent: Agent) {
-        let agentsByName = buildAgentMap(startingAgent)
-        for (name, tools) in snapshot {
-            if let agent = agentsByName[name] {
-                addToolUse(agent, tools)
-            } else {
-                lock.lock()
-                agentMap[name, default: []].formUnion(tools)
-                lock.unlock()
-            }
+    /// Converts the tracker into a snapshot keyed by stable agent identity (upstream
+    /// `serialize_tool_use_tracker`), so duplicate-name agents keep separate entries.
+    func serialize(startingAgent: Agent?) -> [String: [String]] {
+        let identityKeys = startingAgent.map(buildAgentIdentityKeysById)
+        lock.lock()
+        defer { lock.unlock() }
+        var snapshot: [String: [String]] = [:]
+        for (agent, tools) in agentToTools {
+            let key = identityKeys?[ObjectIdentifier(agent)] ?? agent.name
+            snapshot[key, default: []].append(contentsOf: tools)
         }
+        return snapshot
     }
-}
 
-/// Builds a name → agent map by walking handoffs and agent tools from `startingAgent`.
-func buildAgentMap(_ startingAgent: Agent) -> [String: Agent] {
-    var map: [String: Agent] = [:]
-    var queue: [Agent] = [startingAgent]
-    var visited: Set<ObjectIdentifier> = []
-    while !queue.isEmpty {
-        let agent = queue.removeFirst()
-        guard visited.insert(ObjectIdentifier(agent)).inserted else { continue }
-        if map[agent.name] == nil { map[agent.name] = agent }
-        for target in agent.handoffs {
-            switch target {
-            case .agent(let other): queue.append(other)
-            case .handoff(let handoff):
-                if let other = handoff.agentRef as? Agent { queue.append(other) }
-            }
-        }
-        for case let tool as FunctionTool in agent.tools {
-            if let nested = tool.agentInstance { queue.append(nested) }
+    /// Seeds the tracker from a serialized snapshot (upstream `hydrate_tool_use_tracker`).
+    ///
+    /// Keys are resolved as agent identities first, then as agent names; unknown keys are skipped.
+    func hydrate(from snapshot: [String: [String]], startingAgent: Agent) {
+        guard !snapshot.isEmpty else { return }
+        let agentsByName = buildAgentMap(startingAgent)
+        let agentsByIdentity = buildAgentIdentityMap(startingAgent)
+        for (key, tools) in snapshot {
+            guard let agent = agentsByIdentity[key] ?? agentsByName[key] else { continue }
+            addToolUse(agent, tools)
         }
     }
-    return map
 }

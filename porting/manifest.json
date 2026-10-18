@@ -47,9 +47,11 @@
       "notes": ""
     },
     "src/agents/_run_state_agent_identity.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/RunStateAgentIdentity.swift"
+      ],
+      "notes": "Agent signatures use Swift-describable configuration (D14); sandbox capability signatures are out of scope."
     },
     "src/agents/_tool_identity.py": {
       "status": "ported",
@@ -846,7 +848,7 @@
         "Sources/Agents/Run.swift",
         "Sources/Agents/RunInternal/TurnPreparation.swift"
       ],
-      "notes": ""
+      "notes": "resolve_resumed_context is resolveResumedContext in Run.swift."
     },
     "src/agents/run_internal/agent_tool_configuration.py": {
       "status": "pending",
@@ -882,7 +884,7 @@
       "swift": [
         "Sources/Agents/RunInternal/RunInternalItems.swift"
       ],
-      "notes": "Renamed (D10); nested-history provenance not ported."
+      "notes": "Renamed (D10); nested-history provenance not ported. Fingerprints use Python json.dumps formatting so digests match Python-written snapshots."
     },
     "src/agents/run_internal/model_provider_lifecycle.py": {
       "status": "pending",
@@ -901,7 +903,7 @@
       "swift": [
         "Sources/Agents/RunInternal/OAIConversation.swift"
       ],
-      "notes": "Identity tracking via RunItem identities."
+      "notes": "Pending-input lineage is matched by content (D11). Pending: session-history hydration, accepted input ids by occurrence, and anonymous tool_search restoration."
     },
     "src/agents/run_internal/prompt_cache_key.py": {
       "status": "pending",
@@ -933,7 +935,7 @@
       "swift": [
         "Sources/Agents/RunInternal/SessionPersistence.swift"
       ],
-      "notes": "Pending-write checkpoints and compaction generations not ported."
+      "notes": "Pending-write checkpoints and compaction generations not ported. admit_pending_input and commit_server_pending_input live in Run.swift (admitPendingInput, commitServerPendingInput)."
     },
     "src/agents/run_internal/streaming.py": {
       "status": "partial",
@@ -993,9 +995,11 @@
     "src/agents/run_state.py": {
       "status": "partial",
       "swift": [
-        "Sources/Agents/RunState.swift"
+        "Sources/Agents/RunState.swift",
+        "Sources/Agents/RunStateSerialization.swift",
+        "Sources/Agents/RunStateDeserialization.swift"
       ],
-      "notes": "In-process resume only; JSON serialization pending."
+      "notes": "JSON serialization (schema 1.18) ported (D13). Pending: tool invocation ledger (tool_invocations is written empty), agent-owned function approvals (restored into tool-name approvals), hosted MCP query records, nested agent-tool run states, nested history ownership retention (validated, then dropped), pending Session writes, terminal-unrecoverable marker, programmatic tool calling resume checks, current-response item identity restore, error redaction, and sandbox payloads (out of scope)."
     },
     "src/agents/sandbox/__init__.py": {
       "status": "out_of_scope",
@@ -1941,219 +1945,299 @@
       "notes": "Fixtures consumed by ported tests."
     },
     "tests/fixtures/run_state/README.md": {
-      "status": "pending",
+      "status": "skipped",
       "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "notes": "Corpus generator tooling; the frozen fixtures are copied."
     },
     "tests/fixtures/run_state/features/v1_10_unlimited_max_turns.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/features/v1_10_unlimited_max_turns.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/features/v1_11_tool_output_custom_data.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/features/v1_11_tool_output_custom_data.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/features/v1_12_input_cache_write_usage.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/features/v1_12_input_cache_write_usage.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/features/v1_13_nested_history_ownership.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/features/v1_13_nested_history_ownership.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/features/v1_13_programmatic_tool_calling.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/features/v1_13_programmatic_tool_calling.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/features/v1_14_hosted_mcp_approval_scope.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/features/v1_14_hosted_mcp_approval_scope.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/features/v1_15_canonical_invocation_identity.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/features/v1_15_canonical_invocation_identity.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/features/v1_16_per_call_approval_override.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/features/v1_16_per_call_approval_override.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/features/v1_17_docker_labels.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/features/v1_17_docker_labels.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/features/v1_2_reasoning_item_id_policy.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/features/v1_2_reasoning_item_id_policy.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/features/v1_3_resumed_trace_state.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/features/v1_3_resumed_trace_state.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/features/v1_4_request_id.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/features/v1_4_request_id.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/features/v1_5_tool_search_and_display_metadata.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/features/v1_5_tool_search_and_display_metadata.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/features/v1_6_approval_rejection_message.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/features/v1_6_approval_rejection_message.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/features/v1_7_duplicate_agent_identity_and_sandbox.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/features/v1_7_duplicate_agent_identity_and_sandbox.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/features/v1_8_prompt_cache_key.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/features/v1_8_prompt_cache_key.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/features/v1_9_custom_tool_call_and_tool_origin.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/features/v1_9_custom_tool_call_and_tool_origin.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/generate_corpus.py": {
-      "status": "pending",
+      "status": "skipped",
       "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "notes": "Corpus generator tooling; the frozen fixtures are copied."
     },
     "tests/fixtures/run_state/minimal/v1_0.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_0.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/minimal/v1_1.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_1.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/minimal/v1_10.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_10.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/minimal/v1_11.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_11.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/minimal/v1_12.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_12.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/minimal/v1_13.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_13.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/minimal/v1_14.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_14.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/minimal/v1_15.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_15.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/minimal/v1_16.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_16.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/minimal/v1_17.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_17.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/minimal/v1_2.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_2.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/minimal/v1_3.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_3.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/minimal/v1_4.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_4.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/minimal/v1_5.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_5.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/minimal/v1_6.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_6.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/minimal/v1_7.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_7.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/minimal/v1_8.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_8.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/minimal/v1_9.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/minimal/v1_9.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/negative/future_version.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/negative/future_version.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/negative/malformed_current_agent.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/negative/malformed_current_agent.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/negative/missing_version.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/negative/missing_version.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/resume/v1_13_pending_tool_approval.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/resume/v1_13_pending_tool_approval.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/fixtures/run_state/security/v1_13_legacy_mount_credentials.json": {
-      "status": "pending",
+      "status": "out_of_scope",
       "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "notes": "Sandbox credential state (D2)."
     },
     "tests/fixtures/run_state/sources.json": {
-      "status": "pending",
-      "swift": [],
-      "notes": "Fixtures consumed by ported tests."
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Fixtures/run_state/sources.json"
+      ],
+      "notes": "Copied unchanged."
     },
     "tests/mcp/__init__.py": {
       "status": "skipped",
@@ -3120,7 +3204,7 @@
         "Tests/AgentsTests/AgentRunnerTests+Collisions.swift",
         "Tests/AgentsTests/AgentRunnerTests+Utilities.swift"
       ],
-      "notes": "Blocked-output, sandbox, SQLite/OpenAI conversation sessions, RunState serialization, and execute_approved_tools cases pending/skipped."
+      "notes": "Blocked-output, sandbox, SQLite/OpenAI conversation sessions, and execute_approved_tools cases pending/skipped."
     },
     "tests/test_agent_runner_streamed.py": {
       "status": "partial",
@@ -3473,9 +3557,10 @@
     "tests/test_max_turns.py": {
       "status": "partial",
       "swift": [
-        "Tests/AgentsTests/MaxTurnsTests.swift"
+        "Tests/AgentsTests/MaxTurnsTests.swift",
+        "Tests/AgentsTests/MaxTurnsTests+ResumedState.swift"
       ],
-      "notes": "SQLiteSession and RunState serialization cases pending."
+      "notes": "SQLiteSession cases use SimpleListSession. Pending: raw handler output, session cancellation and failure, and resumed output guardrail result cases."
     },
     "tests/test_mcp_tool_metadata.py": {
       "status": "pending",
@@ -3595,11 +3680,11 @@
       "notes": "release_agents/weakref cases skipped."
     },
     "tests/test_resume_tool_use_behavior.py": {
-      "status": "partial",
+      "status": "ported",
       "swift": [
         "Tests/AgentsTests/ResumeToolUseBehaviorTests.swift"
       ],
-      "notes": "serialized=True cases pending RunState.to_string/from_string."
+      "notes": ""
     },
     "tests/test_run.py": {
       "status": "ported",
@@ -3672,24 +3757,37 @@
       "notes": "pytest serial runner."
     },
     "tests/test_run_state.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/RunStateTests.swift",
+        "Tests/AgentsTests/RunStateTests+SerializationRoundTrip.swift",
+        "Tests/AgentsTests/RunStateTests+Resumption.swift",
+        "Tests/AgentsTests/RunStateTests+SerializationEdgeCases.swift",
+        "Tests/AgentsTests/RunStateTests+SchemaEdgeCases.swift",
+        "Tests/AgentsTests/RunStateTests+ToolApprovalItem.swift"
+      ],
+      "notes": "Pending until their modules are ported: tool invocation ledger and hosted MCP query approval cases, nested agent-tool state cases (agent_tool_state.py), programmatic tool calling resume checks (tool_caller.py), and nested history ownership round trips. Skipped: pydantic/deepcopy snapshot cases, Python truthiness, bare string input items, ad-hoc tool attributes, and sandbox cases (out of scope). Each file lists the cases at its top."
     },
     "tests/test_run_state_agent_identity.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/RunStateAgentIdentityTests.swift"
+      ],
+      "notes": "Skipped: falsy agent (no truthiness), sandbox capability identity (out of scope), and legacy duck-typed handoff wrappers (typed HandoffTarget)."
     },
     "tests/test_run_state_compatibility_corpus.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/RunStateCompatibilityCorpusTests.swift"
+      ],
+      "notes": "Feature fixtures for sandbox (out of scope), nested history ownership, hosted MCP query records, and the tool invocation ledger run as known issues. Skipped: monkeypatching, credential, and Python exception-internals cases."
     },
     "tests/test_run_state_pending_input.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/RunStatePendingInputTests.swift"
+      ],
+      "notes": "Pending: server-acceptance cases that need the accepted-response resume state and the tool invocation ledger. Skipped: in-place filter rewrite (D11)."
     },
     "tests/test_run_step_execution.py": {
       "status": "pending",
@@ -4005,16 +4103,18 @@
       "notes": ""
     },
     "tests/utils/factories.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/Utils/Factories.swift"
+      ],
+      "notes": "TestSessionState builds sandbox state and is out of scope."
     },
     "tests/utils/hitl.py": {
       "status": "partial",
       "swift": [
         "Tests/AgentsTests/Utils/HITL.swift"
       ],
-      "notes": ""
+      "notes": "Builders and resume helpers used by the ported tests; the remaining scenario helpers are ported with the tests that need them."
     },
     "tests/utils/simple_session.py": {
       "status": "ported",

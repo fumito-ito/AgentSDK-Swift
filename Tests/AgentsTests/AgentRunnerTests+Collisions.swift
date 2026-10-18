@@ -51,7 +51,9 @@ extension AgentRunnerTests {
 
         let state = try toState(first)
         try state.approve(first.interruptions[0], alwaysApprove: true)
-        let resumed = try await resumeMaybeStreamed(agent, state: state, streamed: streamed)
+        let restoredState = try await RunState.fromJSON(agent, try state.toJSON())
+
+        let resumed = try await resumeMaybeStreamed(agent, state: restoredState, streamed: streamed)
 
         #expect(resumed.interruptions.count == 1)
         #expect(resumed.interruptions.first?.rawItem.string("server_label") == "server-b")

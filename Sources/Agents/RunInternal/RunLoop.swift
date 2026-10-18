@@ -186,6 +186,7 @@ func getNewResponse(
         inputItems: input, systemInstructions: systemPrompt
     )
     filtered.input = deduplicateInputItemsPreferringLatest(filtered.input)
+    try serverConversationTracker?.validatePendingInputFilter(filtered.input)
 
     let model = try getModel(agent, runConfig)
     toolUseTracker.recordModel(model)
@@ -291,6 +292,7 @@ func runSingleTurnStreamed( // swiftlint:disable:this function_body_length
         inputItems: input, systemInstructions: setup.systemPrompt
     )
     filtered.input = deduplicateInputItemsPreferringLatest(filtered.input)
+    try serverConversationTracker?.validatePendingInputFilter(filtered.input)
     serverConversationTracker?.markInputAsSent(filtered.input)
     try await runLLMStartHooks(agent: agent, hooks: hooks, contextWrapper: contextWrapper, instructions: filtered.instructions, input: filtered.input)
     try await persistInputIfNeeded?()

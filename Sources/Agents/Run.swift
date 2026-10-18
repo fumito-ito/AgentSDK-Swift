@@ -57,9 +57,13 @@ public enum Runner {
     }
 
     /// Resumes a run from a `RunState`, e.g. after approving or rejecting interruptions.
+    ///
+    /// Pass `context` to replace the application context of the restored `RunContextWrapper`; the
+    /// wrapper's approvals, usage, and tool input are kept.
     public static func run(
         _ startingAgent: Agent,
         state: RunState,
+        context: (any Sendable)? = nil,
         hooks: RunHooks? = nil,
         runConfig: RunConfig? = nil,
         errorHandlers: RunErrorHandlers? = nil,
@@ -68,7 +72,8 @@ public enum Runner {
         conversationId: String? = nil,
         session: (any Session)? = nil
     ) async throws -> RunResult {
-        try await getDefaultAgentRunner().run(
+        resolveResumedContext(runState: state, context: context)
+        return try await getDefaultAgentRunner().run(
             startingAgent, input: .state(state), contextWrapper: nil, maxTurns: state.maxTurns,
             hooks: hooks, runConfig: runConfig, errorHandlers: errorHandlers, previousResponseId: previousResponseId,
             autoPreviousResponseId: autoPreviousResponseId, conversationId: conversationId, session: session
@@ -120,9 +125,12 @@ public enum Runner {
     }
 
     /// Resumes a run from a `RunState` in streaming mode.
+    ///
+    /// Pass `context` to replace the application context of the restored `RunContextWrapper`.
     public static func runStreamed(
         _ startingAgent: Agent,
         state: RunState,
+        context: (any Sendable)? = nil,
         hooks: RunHooks? = nil,
         runConfig: RunConfig? = nil,
         errorHandlers: RunErrorHandlers? = nil,
@@ -131,7 +139,8 @@ public enum Runner {
         conversationId: String? = nil,
         session: (any Session)? = nil
     ) throws -> RunResultStreaming {
-        try getDefaultAgentRunner().runStreamed(
+        resolveResumedContext(runState: state, context: context)
+        return try getDefaultAgentRunner().runStreamed(
             startingAgent, input: .state(state), contextWrapper: nil, maxTurns: state.maxTurns,
             hooks: hooks, runConfig: runConfig, errorHandlers: errorHandlers, previousResponseId: previousResponseId,
             autoPreviousResponseId: autoPreviousResponseId, conversationId: conversationId, session: session
@@ -315,6 +324,8 @@ private final class RunDriver: @unchecked Sendable {
     var sessionItems: [RunItem] = []
     var modelResponses: [ModelResponse] = []
     var pendingServerItems: [RunItem]?
+    /// Pending input admitted for a server-managed request, awaiting the server's acceptance.
+    var pendingInputAdmissionItems: [InputItem] = []
     var inputGuardrailResults: [InputGuardrailResult] = []
     var inputGuardrailAttemptStart = 0
     var outputGuardrailResults: [OutputGuardrailResult] = []
@@ -388,10 +399,11 @@ private final class RunDriver: @unchecked Sendable {
             sessionInputItemsForPersistence = session != nil ? [] : nil
             if let serverConversationTracker {
                 serverConversationTracker.hydrateFromState(
-                    originalInput: state.originalInput, generatedItems: state.generatedItems, modelResponses: state.modelResponses
+                    originalInput: state.originalInput, generatedItems: state.generatedItems, modelResponses: state.modelResponses,
+                    unsentToolCallIds: getUnsentToolCallIdsForInterruptedState(state)
                 )
             }
-            toolUseTracker.hydrate(from: state.toolUseTrackerSnapshot, startingAgent: state.startingAgent)
+            toolUseTracker.hydrate(from: state.toolUseTrackerSnapshot, startingAgent: startingAgent)
         } else {
             guard case .input(let raw) = input else { fatalError("unreachable") }
             isResumedState = false
@@ -610,9 +622,10 @@ private final class RunDriver: @unchecked Sendable {
             }
 
             let itemsForModel = serverConversationTracker != nil && !(pendingServerItems ?? []).isEmpty ? pendingServerItems! : generatedItems
-            let turnResult = try await withOptionalCurrentSpan(currentSpan) {
+            var turnResult = try await withOptionalCurrentSpan(currentSpan) {
                 try await runTurn(itemsForModel: itemsForModel, sequentialGuardrails: sequentialGuardrails, parallelGuardrails: parallelGuardrails)
             }
+            commitServerPendingInput(&turnResult)
             shouldRunAgentStartHooks = false
             lastSavedInputSnapshotForRewind = nil
 
@@ -855,9 +868,9 @@ private final class RunDriver: @unchecked Sendable {
         }
         try await saveFinalTurnItemsAfterGuardrails(turnSessionItems, responseId: turnResult.modelResponse.responseId)
         streamed?.update { $0.finalOutput = output }
-        let result = makeResult(input: resultInput, finalOutput: output, interruptions: [])
+        // A final output ends the run, so the state it leaves behind is terminal.
         runState.currentStep = nil
-        return result
+        return makeResult(input: resultInput, finalOutput: output, interruptions: [])
     }
 
     private func saveFinalTurnItemsAfterGuardrails(_ items: [RunItem], responseId: String?) async throws {
@@ -895,7 +908,7 @@ private final class RunDriver: @unchecked Sendable {
             currentTurn: currentTurn,
             lastProcessedResponse: processedResponse,
             currentTurnPersistedItemCount: runState.currentTurnPersistedItemCount,
-            toolUseTrackerSnapshot: toolUseTracker.asSerializable(),
+            toolUseTrackerSnapshot: toolUseTracker.serialize(startingAgent: startingAgent),
             originalInput: originalInput,
             conversationId: conversationId,
             previousResponseId: serverConversationTracker?.previousResponseId ?? previousResponseId,
@@ -1008,7 +1021,11 @@ private final class RunDriver: @unchecked Sendable {
         streamStepItems(items, to: streamed)
     }
 
-    /// Runs guardrails on input staged with `RunState.addInput` and admits it into history.
+    /// Runs guardrails on input staged with `RunState.addInput` and admits it into history
+    /// (upstream `admit_pending_input`).
+    ///
+    /// Client-managed conversations accept the input before the model call. Server-managed
+    /// conversations keep it pending on the `RunState` until the server accepts the request.
     private func admitPendingInput() async throws {
         let pending = runState.pendingInputItems
         guard !pending.isEmpty else { return }
@@ -1019,14 +1036,39 @@ private final class RunDriver: @unchecked Sendable {
             runState.inputGuardrailResults = inputGuardrailResults
         }
         try await runInputGuardrails(currentAgent, guardrails, .items(pending), contextWrapper, sink: sink)
-        let admitted: [RunItem] = pending.map { InputItem(agent: currentAgent, rawItem: $0) }
+        let admitted = pending.map { InputItem(agent: currentAgent, rawItem: $0) }
         if sessionPersistenceEnabled {
             try await saveResultToSession(session, originalInput: .items(pending), newItems: [], runState: nil, store: storeSetting)
         }
         generatedItems.append(contentsOf: admitted)
         sessionItems.append(contentsOf: admitted)
         pendingServerItems?.append(contentsOf: admitted)
+        if serverConversationTracker != nil {
+            pendingInputAdmissionItems = admitted
+            return
+        }
         runState.clearPendingInput()
+        runState.generatedItems = generatedItems
+        runState.sessionItems = sessionItems
+    }
+
+    /// Commits only the pending-input occurrences a server-managed request delivered (upstream
+    /// `commit_server_pending_input`); omitted occurrences stay pending for a later request.
+    private func commitServerPendingInput(_ turnResult: inout SingleStepResult) {
+        guard let serverConversationTracker, !pendingInputAdmissionItems.isEmpty else { return }
+        let admissions = pendingInputAdmissionItems
+        pendingInputAdmissionItems = []
+        let unaccepted = admissions.filter { !serverConversationTracker.wasSent($0) }
+        let unacceptedIds = Set(unaccepted.map { ObjectIdentifier($0) })
+        func isUnaccepted(_ item: RunItem) -> Bool { unacceptedIds.contains(ObjectIdentifier(item)) }
+        generatedItems.removeAll(where: isUnaccepted)
+        sessionItems.removeAll(where: isUnaccepted)
+        pendingServerItems?.removeAll(where: isUnaccepted)
+        turnResult.preStepItems.removeAll(where: isUnaccepted)
+        turnResult.newStepItems.removeAll(where: isUnaccepted)
+        turnResult.sessionStepItems?.removeAll(where: isUnaccepted)
+        runState.pendingInputItems = unaccepted.map(\.rawItem)
+        guard unaccepted.count < admissions.count else { return }
         runState.generatedItems = generatedItems
         runState.sessionItems = sessionItems
     }
@@ -1072,7 +1114,7 @@ private final class RunDriver: @unchecked Sendable {
         if let streamed, handlerResult.includeInHistory {
             streamStepItems([synthesized], to: streamed)
         }
-        return makeResult(input: originalInput, finalOutput: validated, interruptions: runState.getInterruptions())
+        return makeResult(input: originalInput, finalOutput: validated, interruptions: runState.pendingInterruptions)
     }
 
     /// Persists and records max-turns handler items. Returns the number of items persisted.
@@ -1088,5 +1130,54 @@ private final class RunDriver: @unchecked Sendable {
         generatedItems.append(contentsOf: items)
         sessionItems.append(contentsOf: items)
         return saved
+    }
+}
+
+/// Returns the context wrapper for a resumed run, applying an optional override (upstream
+/// `resolve_resumed_context`).
+///
+/// The restored `RunContextWrapper` stays authoritative: only its application `context` value is
+/// replaced, so run-owned wrapper state (approvals, usage, turn input, tool input) survives.
+@discardableResult
+func resolveResumedContext(runState: RunState, context: (any Sendable)?) -> RunContextWrapper {
+    let existing = runState.context
+    guard let context else { return existing }
+    if let wrapper = context as? RunContextWrapper {
+        if wrapper !== existing { existing.context = wrapper.context }
+    } else {
+        existing.context = context
+    }
+    return existing
+}
+
+/// Returns the call or item identifiers carried by the most recent model response.
+private func latestResponseToolCallIds(_ state: RunState) -> Set<String> {
+    Set((state.modelResponses.last?.output ?? []).compactMap(\.callIdOrId))
+}
+
+/// Returns tool call IDs whose local outputs have not reached a server-managed conversation
+/// (upstream `get_unsent_tool_call_ids_for_interrupted_state`).
+func getUnsentToolCallIdsForInterruptedState(_ state: RunState?) -> Set<String> {
+    guard let state else { return [] }
+    switch state.currentStep {
+    case .runAgain?:
+        return latestResponseToolCallIds(state)
+    case .interruption?:
+        guard let processed = state.lastProcessedResponse else { return [] }
+        // An interrupted turn stops before its next model request, so every tool output it built
+        // locally is still unsent. The latest model response survives both live and restored
+        // states; server-owned items are recorded before this set is consulted.
+        var ids = latestResponseToolCallIds(state)
+        let callIds: [String?] = processed.handoffs.map { $0.toolCall.json.callIdOrId }
+            + processed.functions.map { $0.toolCall.json.callIdOrId }
+            + processed.computerActions.map { $0.toolCall.json.callIdOrId }
+            + processed.customToolCalls.map { $0.toolCall.json.callIdOrId }
+            + processed.localShellCalls.map { $0.toolCall.json.callIdOrId }
+            + processed.shellCalls.map { $0.toolCall.callIdOrId }
+            + processed.applyPatchCalls.map { $0.toolCall.callIdOrId }
+        ids.formUnion(callIds.compactMap { $0 })
+        return ids
+    case nil:
+        return []
     }
 }

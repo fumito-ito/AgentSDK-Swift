@@ -1,11 +1,11 @@
 import Foundation
 
-// Port of src/agents/run_state.py.
+// Port of src/agents/run_state.py. Serialization lives in RunStateSerialization.swift and
+// restoration in RunStateDeserialization.swift (porting/decisions.md D13).
 //
-// Swift: this first port covers in-process pause/resume (approvals, pending input, and the
-// interrupted step). JSON serialization (`to_json`/`from_json`), nested agent-tool states,
-// pending session-write checkpoints, and sandbox payloads are not ported yet; see
-// porting/manifest.json.
+// Swift: the canonical tool invocation ledger, agent-owned function approvals, nested agent-tool
+// states, pending session-write checkpoints, programmatic tool calling resume checks, and sandbox
+// payloads are not ported yet; see porting/manifest.json.
 
 /// The resumable step stored in a `RunState`.
 enum RunStateStep: Sendable {
@@ -39,10 +39,18 @@ public final class RunState: @unchecked Sendable {
     var toolInputGuardrailResults: [ToolInputGuardrailResult] = []
     var toolOutputGuardrailResults: [ToolOutputGuardrailResult] = []
     var currentStep: RunStateStep?
+    /// Whether `on_llm_end` hooks already started for the interrupted response.
+    var llmEndHooksStarted = true
     var lastProcessedResponse: ProcessedResponse?
+    /// Tracks whether `generatedItems` already include the current `lastProcessedResponse`.
+    var generatedItemsLastProcessedMarker: String?
     var currentTurnPersistedItemCount = 0
     var toolUseTrackerSnapshot: [String: [String]] = [:]
     var traceState: TraceState?
+    /// SDK-generated prompt cache key to preserve across resume flows.
+    var generatedPromptCacheKey: String?
+    /// Schema version the snapshot was loaded from.
+    var schemaVersion = RunState.currentSchemaVersion
 
     public init(
         context: RunContextWrapper,
@@ -106,8 +114,28 @@ public final class RunState: @unchecked Sendable {
         pendingInputItems = []
     }
 
-    /// Returns the pending interruptions for the current step.
+    /// Returns detached copies of the pending interruptions for the current step.
+    ///
+    /// Changing a returned item does not change the pending approval; pass it to `approve` or
+    /// `reject` to record a decision.
     public func getInterruptions() -> [ToolApprovalItem] {
+        pendingInterruptions.map { item in
+            let copy = ToolApprovalItem(
+                agent: item.agent,
+                rawItem: item.rawItem,
+                toolName: item.toolName,
+                toolNamespace: item.toolNamespace,
+                toolOrigin: item.toolOrigin,
+                toolLookupKey: item.toolLookupKey,
+                allowBareNameAlias: item.allowBareNameAlias
+            )
+            copy.toolLookupKey = item.toolLookupKey
+            return copy
+        }
+    }
+
+    /// The pending interruptions themselves, for SDK code that needs their identity.
+    var pendingInterruptions: [ToolApprovalItem] {
         guard case .interruption(let interruptions, _)? = currentStep else { return [] }
         return interruptions
     }
@@ -127,14 +155,22 @@ public final class RunState: @unchecked Sendable {
         try context.rejectTool(approvalItem, alwaysReject: alwaysReject, rejectionMessage: rejectionMessage)
     }
 
+    /// Captures trace metadata for serialization and resumption.
     public func setTrace(_ trace: (any Trace)?) {
         traceState = TraceState.fromTrace(trace)
     }
 
+    /// Stores a copy of the serialized tool-use tracker data.
     public func setToolUseTrackerSnapshot(_ snapshot: [String: [String]]?) {
         toolUseTrackerSnapshot = snapshot ?? [:]
     }
 
+    /// Stores how reasoning item IDs should appear in next-turn model input.
+    public func setReasoningItemIdPolicy(_ policy: ReasoningItemIdPolicy?) {
+        reasoningItemIdPolicy = policy
+    }
+
+    /// Returns a copy of the tool-use tracker snapshot.
     public func getToolUseTrackerSnapshot() -> [String: [String]] {
         toolUseTrackerSnapshot
     }

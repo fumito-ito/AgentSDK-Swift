@@ -150,10 +150,13 @@ func normalizeResumedInput(_ input: RunInput) -> RunInput {
 }
 
 /// A hashable fingerprint used to dedupe or rewind input items across resumes.
+///
+/// The text matches upstream's `json.dumps(payload, sort_keys=True)` so that digests derived from
+/// it (`digestInputItem`) agree with snapshots written by the Python SDK.
 func fingerprintInputItem(_ item: TResponseInputItem, ignoreIdsForMatching: Bool = false) -> String {
     var payload = stripInternalInputItemMetadata(item)
     if ignoreIdsForMatching { payload.removeValue(forKey: "id") }
-    return JSONValue.object(payload).jsonString(sortedKeys: true)
+    return JSONValue.object(payload).pythonJSONString(sortedKeys: true)
 }
 
 /// A fixed-size digest of an input item for durable occurrence tracking.
