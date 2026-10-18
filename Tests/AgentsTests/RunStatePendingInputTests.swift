@@ -532,6 +532,79 @@ private func protectedTool(calls: SharedBox<[String]>) throws -> FunctionTool {
         #expect(state.pendingInput.map(messageText) == ["Late input"])
     }
 
+    // MARK: - Server delivery bookkeeping
+
+    // Swift: the next two tests have no upstream counterpart. Upstream ties each delivered request
+    // item to its prepared source by object identity; Swift input items are values, so these pin
+    // the occurrence mapping that replaces it.
+
+    private func resume(_ agent: Agent, _ state: RunState, streamed: Bool, runConfig: RunConfig? = nil) async throws -> (any Sendable)? {
+        if streamed {
+            let result = try Runner.runStreamed(agent, state: state, runConfig: runConfig)
+            for try await _ in result.streamEvents() {}
+            return result.finalOutput
+        }
+        return try await Runner.run(agent, state: state, runConfig: runConfig).finalOutput
+    }
+
+    @Test(arguments: [false, true])
+    func testServerFilterKeepingOneIdenticalPendingInputLeavesTheOtherPending(streamed: Bool) async throws {
+        let (model, agent, state, calls) = try await makeAfterTurnState(autoPreviousResponseId: true)
+        try state.addInput("Late input")
+        try state.addInput("Late input")
+        try model.extend([
+            .output([getFunctionToolCall("record_destination", arguments: #"{"destination": "Rome"}"#, callId: "call-rome")]),
+            .output([getTextMessage("Done")]),
+        ])
+        let filterCalls = SharedBox(0)
+        let dropSecondCopyOnce: CallModelInputFilter = { data in
+            let call = filterCalls.mutate { count -> Int in
+                count += 1
+                return count
+            }
+            guard call == 1, let last = data.modelData.input.lastIndex(where: { messageText($0) == "Late input" }) else {
+                return data.modelData
+            }
+            var input = data.modelData.input
+            input.remove(at: last)
+            return ModelInputData(input: input, instructions: data.modelData.instructions)
+        }
+
+        let output = try await resume(agent, state, streamed: streamed, runConfig: RunConfig(callModelInputFilter: dropSecondCopyOnce))
+
+        #expect(output as? String == "Done")
+        #expect(calls.value == ["Paris", "Rome"])
+        let sentCounts = model.calls.suffix(2).map { call in
+            (call.input.inputItems ?? []).filter { messageText($0) == "Late input" }.count
+        }
+        #expect(sentCounts == [1, 1])
+        #expect(state.pendingInput.isEmpty)
+    }
+
+    @Test(arguments: [false, true])
+    func testServerRetryAfterFailureCommitsPendingInputOnce(streamed: Bool) async throws {
+        let (model, agent, state, calls) = try await makeAfterTurnState(autoPreviousResponseId: true)
+        agent.modelSettings = ModelSettings(retry: ModelRetrySettings(maxRetries: 1, policy: retryPolicies.networkError()))
+        try state.addInput("Late input")
+        try model.extend([
+            .raiseError(
+                OpenAIAPIError(message: "connection error", isConnectionError: true),
+                retryAdvice: ModelRetryAdvice(suggested: true, replaySafety: "safe")
+            ),
+            .output([getFunctionToolCall("record_destination", arguments: #"{"destination": "Rome"}"#, callId: "call-rome")]),
+            .output([getTextMessage("Done")]),
+        ])
+
+        let output = try await resume(agent, state, streamed: streamed)
+
+        #expect(output as? String == "Done")
+        #expect(calls.value == ["Paris", "Rome"])
+        let lastInput = try #require(model.calls.last?.input.inputItems)
+        #expect(lastInput.map(itemType) == ["function_call_output"])
+        #expect(lastInput.first?.string("call_id") == "call-rome")
+        #expect(state.pendingInput.isEmpty)
+    }
+
     // Swift: test_server_filter_in_place_pending_rewrite_preserves_occurrence is not ported. Input
     // items are values, so an in-place rewrite is indistinguishable from a reconstructed item and
     // is rejected like one (porting/decisions.md D11).

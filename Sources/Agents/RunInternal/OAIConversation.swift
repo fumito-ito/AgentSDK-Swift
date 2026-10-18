@@ -33,7 +33,8 @@ final class OpenAIServerConversationTracker: @unchecked Sendable {
     private var serverItemFingerprints: Set<String> = []
     var sentItemFingerprints: Set<String> = []
     private var sentRunItems: Set<ObjectIdentifier> = []
-    /// Prepared input fingerprint → source run items, in preparation order.
+    /// Prepared input fingerprint → source run items, in preparation order. Fixed for the request
+    /// it was prepared for, so repeated marking and rewinds resolve the same sources.
     private var preparedSources: [String: [ObjectIdentifier]] = [:]
     /// Prepared input fingerprint → how many of those inputs came from staged `RunState` input.
     private var preparedPendingFingerprints: [String: Int] = [:]
@@ -106,12 +107,10 @@ final class OpenAIServerConversationTracker: @unchecked Sendable {
     func markInputAsSent(_ items: [TResponseInputItem]) {
         guard !items.isEmpty else { return }
         var delivered: Set<String> = []
-        for item in items {
-            let fingerprint = trackerFingerprint(item)
+        for (fingerprint, source) in deliverySources(items) {
             delivered.insert(fingerprint)
-            if var sources = preparedSources[fingerprint], !sources.isEmpty {
-                sentRunItems.insert(sources.removeFirst())
-                preparedSources[fingerprint] = sources
+            if let source {
+                sentRunItems.insert(source)
             } else {
                 sentItemFingerprints.insert(fingerprint)
             }
@@ -119,6 +118,23 @@ final class OpenAIServerConversationTracker: @unchecked Sendable {
         guard let remaining = remainingInitialInput else { return }
         let filtered = remaining.filter { !delivered.contains(trackerFingerprint($0)) }
         remainingInitialInput = filtered.isEmpty ? nil : filtered
+    }
+
+    /// Resolves each request item to the run item it was prepared from.
+    ///
+    /// Swift: upstream remembers the source of each request item by object identity. Input items
+    /// are values here, so the n-th request item with a fingerprint maps to the n-th prepared source
+    /// with that fingerprint. The mapping does not consume `preparedSources`, so marking the same
+    /// request again (after success or a retry) resolves the same sources.
+    private func deliverySources(_ items: [TResponseInputItem]) -> [(fingerprint: String, source: ObjectIdentifier?)] {
+        var occurrences: [String: Int] = [:]
+        return items.map { item in
+            let fingerprint = trackerFingerprint(item)
+            let index = occurrences[fingerprint, default: 0]
+            occurrences[fingerprint] = index + 1
+            let sources = preparedSources[fingerprint] ?? []
+            return (fingerprint, index < sources.count ? sources[index] : nil)
+        }
     }
 
     /// Marks inputs as accepted by the server after a successful request.
@@ -129,10 +145,13 @@ final class OpenAIServerConversationTracker: @unchecked Sendable {
     /// Rewinds previously marked inputs so they can be resent.
     func rewindInput(_ items: [TResponseInputItem]) {
         guard !items.isEmpty else { return }
-        for item in items {
-            sentItemFingerprints.remove(trackerFingerprint(item))
+        for (fingerprint, source) in deliverySources(items) {
+            if let source {
+                sentRunItems.remove(source)
+            } else {
+                sentItemFingerprints.remove(fingerprint)
+            }
         }
-        sentRunItems.removeAll()
         logger.debug("Queued \(items.count) items to resend after conversation retry")
         remainingInitialInput = items + (remainingInitialInput ?? [])
     }

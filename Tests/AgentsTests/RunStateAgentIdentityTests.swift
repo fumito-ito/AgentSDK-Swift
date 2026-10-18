@@ -136,6 +136,34 @@ private func emptyContext() -> RunContextWrapper {
         #expect(restored.currentAgent === restoredGraph.stop)
     }
 
+    // Swift: no upstream counterpart. Pins upstream's `agent_tool_target` entry in tool signatures,
+    // which tells apart duplicates whose agent tools share a name but wrap different agents.
+    private func agentToolGraph(swapped: Bool) throws -> (root: Agent, usesEnglish: Agent, usesFrench: Agent) {
+        let english = Agent(name: "english", instructions: "Answer in English.")
+        let french = Agent(name: "french", instructions: "Answer in French.")
+        let usesEnglish = Agent(
+            name: "duplicate",
+            tools: [try english.asTool(toolName: "translate", toolDescription: "Translate the text.")]
+        )
+        let usesFrench = Agent(
+            name: "duplicate",
+            tools: [try french.asTool(toolName: "translate", toolDescription: "Translate the text.")]
+        )
+        let root = Agent(name: "triage", handoffs: swapped ? [.agent(usesFrench), .agent(usesEnglish)] : [.agent(usesEnglish), .agent(usesFrench)])
+        return (root, usesEnglish, usesFrench)
+    }
+
+    @Test func testBuildAgentIdentityMapUsesAgentToolTargetForDuplicateNames() throws {
+        let first = try agentToolGraph(swapped: false)
+        let second = try agentToolGraph(swapped: true)
+
+        let firstMap = buildAgentIdentityMap(first.root)
+        let secondMap = buildAgentIdentityMap(second.root)
+
+        #expect(identity(of: first.usesEnglish, in: firstMap) == identity(of: second.usesEnglish, in: secondMap))
+        #expect(identity(of: first.usesFrench, in: firstMap) == identity(of: second.usesFrench, in: secondMap))
+    }
+
     @Test func testFromJSONRejectsMissingSavedDuplicateIdentity() async throws {
         let second = Agent(name: "duplicate", instructions: "Second")
         let first = Agent(name: "duplicate", instructions: "First", handoffs: [.agent(second)])

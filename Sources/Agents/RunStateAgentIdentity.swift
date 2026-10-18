@@ -61,6 +61,7 @@ private func toolIdentityText(_ tool: any Tool) -> String {
         signature["description"] = .string(function.description)
         signature["params_json_schema"] = .object(function.paramsJSONSchema)
         if let namespace = function.toolNamespace { signature["namespace"] = .string(namespace) }
+        if let nested = function.agentInstance { signature["agent_tool_target"] = .string(nested.name) }
     }
     return stableIdentityText(.object(signature))
 }
