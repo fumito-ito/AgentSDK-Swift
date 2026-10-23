@@ -528,7 +528,9 @@ import AgentsTesting
         let firstAgent = try scriptedAgent(operation, #"{"request":{"value":"first"}}"#)
 
         let task = Task { _ = try await runAgent(firstAgent, .text("go")) }
-        try await started.wait(timeout: 1)
+        // Swift: upstream waits 1 second; a loaded CI runner can take longer to reach the policy.
+        defer { task.cancel() }
+        try await started.wait(timeout: 5)
         task.cancel()
         await #expect(throws: CancellationError.self) { try await task.value }
         let result = try await runAgent(try scriptedAgent(operation, #"{"request":{"value":"second"}}"#), .text("go"))
