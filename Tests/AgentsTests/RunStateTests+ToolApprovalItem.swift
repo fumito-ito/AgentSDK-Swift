@@ -6,13 +6,15 @@ import AgentsTesting
 // Ported from tests/test_run_state.py (classes TestToolApprovalItem and
 // TestDeserializeItemsEdgeCases, and the module-level resume, hosted MCP, and guardrail tests).
 //
+// The invocation ledger and hosted MCP query record tests
+// (`test_approve_tool_rejects_uncanonical_hosted_call_dict`,
+// `test_hosted_mcp_approval_round_trip_uses_typed_identity_records`,
+// `test_incomplete_hosted_mcp_query_cannot_create_approval_authority`,
+// `test_hosted_mcp_rejection_query_round_trip_does_not_cross_servers`, and
+// `test_schema_1_13_hosted_mcp_orphaned_call_decisions_require_reapproval`) are in
+// RunStateTests+InvocationLedger.swift.
+//
 // Swift: not ported, and recorded in porting/manifest.json:
-// - Tool invocation ledger and hosted MCP query records (`_tool_invocation.py`):
-//   `test_approve_tool_rejects_uncanonical_hosted_call_dict`,
-//   `test_hosted_mcp_approval_round_trip_uses_typed_identity_records`,
-//   `test_incomplete_hosted_mcp_query_cannot_create_approval_authority`,
-//   `test_hosted_mcp_rejection_query_round_trip_does_not_cross_servers`, and
-//   `test_schema_1_13_hosted_mcp_orphaned_call_decisions_require_reapproval`.
 // - Nested agent-tool run state (`agent_tool_state.py`):
 //   `test_resume_nested_agent_as_tool_with_context_override` and
 //   `test_resume_recursively_nested_agent_as_tool_decision`.
@@ -432,7 +434,7 @@ private let helloMessage: JSONValue = [
         #expect(resolved === state.context)
         #expect(resolved.context(as: JSONObject.self) == override)
         #expect(resolved.usageBox === restoredWrapper.usageBox)
-        #expect(resolved.approvalsBox === restoredWrapper.approvalsBox)
+        #expect(resolved.toolStateBox === restoredWrapper.toolStateBox)
         #expect(resolved.approvals["needs_ok"]?.approved == .callIds(["1"]))
         #expect(resolved.turnInput == [["role": "user", "content": "hi"]])
         #expect(resolved.toolInput as? JSONObject == ["scoped": true])
@@ -494,7 +496,7 @@ private let helloMessage: JSONValue = [
         #expect(result.contextWrapper === restoredWrapper)
         #expect(result.contextWrapper.context(as: JSONObject.self) == override)
         #expect(result.contextWrapper.toolInput as? JSONValue == ["scoped": true])
-        #expect(result.contextWrapper.approvalsBox === restoredWrapper.approvalsBox)
+        #expect(result.contextWrapper.toolStateBox === restoredWrapper.toolStateBox)
     }
 }
 

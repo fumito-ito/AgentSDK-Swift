@@ -110,6 +110,7 @@ struct FunctionToolBatchExecutor {
     let contextWrapper: RunContextWrapper
     let config: RunConfig
     let availableFunctionTools: [any Tool]
+    var toolOutputCommitter: ToolOutputCommitter?
     let inputGuardrailResults = SharedBox<[ToolInputGuardrailResult]>([])
     let outputGuardrailResults = SharedBox<[ToolOutputGuardrailResult]>([])
 
@@ -204,13 +205,13 @@ struct FunctionToolBatchExecutor {
         )
         var status = try contextWrapper.getApprovalStatus(
             toolName: tool.name, callId: toolCall.callId, toolNamespace: namespace,
-            existingPending: approvalItem, toolLookupKey: lookupKey
+            toolLookupKey: lookupKey, currentInvocation: approvalItem
         )
         if status == nil {
             let needsApproval = try await functionNeedsApproval(tool, contextWrapper, toolCall)
             status = try contextWrapper.getApprovalStatus(
                 toolName: tool.name, callId: toolCall.callId, toolNamespace: namespace,
-                existingPending: approvalItem, toolLookupKey: lookupKey
+                toolLookupKey: lookupKey, currentInvocation: approvalItem
             )
             if status == nil, !needsApproval { return nil }
         }
@@ -219,7 +220,7 @@ struct FunctionToolBatchExecutor {
                 let rejected = try await executeToolInputGuardrails(tool: tool, toolContext: toolContext, agent: agent, results: inputGuardrailResults)
                 status = try contextWrapper.getApprovalStatus(
                     toolName: tool.name, callId: toolCall.callId, toolNamespace: namespace,
-                    existingPending: approvalItem, toolLookupKey: lookupKey
+                    toolLookupKey: lookupKey, currentInvocation: approvalItem
                 )
                 if status == nil, let rejected {
                     return FunctionToolResult(
@@ -237,10 +238,10 @@ struct FunctionToolBatchExecutor {
             return FunctionToolResult(tool: tool, output: Optional<String>.none as any Sendable, runItem: approvalItem)
         }
         if status == true { return nil }
-        let message = await resolveApprovalRejectionMessage(
+        let message = try await resolveApprovalRejectionMessage(
             contextWrapper: contextWrapper, runConfig: config, toolType: "function",
             toolName: toolTraceName(tool.name, namespace: namespace) ?? tool.name, callId: toolCall.callId,
-            toolNamespace: namespace, toolLookupKey: lookupKey, existingPending: approvalItem
+            toolCall: toolCall.json, toolNamespace: namespace, toolLookupKey: lookupKey, existingPending: approvalItem
         )
         span.setError(SpanError(
             message: getTraceError(traceIncludeSensitiveData: config.traceIncludeSensitiveData, errorMessage: message, redactedMessage: "Tool execution rejected"),
@@ -260,6 +261,7 @@ struct FunctionToolBatchExecutor {
     }
 
     private func executeSingleToolBody(tool: FunctionTool, toolCall: ResponseFunctionToolCall, toolContext: ToolContext) async throws -> FunctionToolResult {
+        try contextWrapper.markToolInvocationExecuted(toolCall.json, toolLookupKey: getFunctionToolLookupKeyForTool(tool))
         if let rejected = try await executeToolInputGuardrails(tool: tool, toolContext: toolContext, agent: agent, results: inputGuardrailResults) {
             let provider = functionToolErrorOutput(toolCall: toolCall.json, output: rejected, outputJSONSchema: tool.outputJSONSchema)
             return FunctionToolResult(
@@ -290,6 +292,7 @@ struct FunctionToolBatchExecutor {
             toolCall, output: providerResult, outputJSONSchema: bypassOutputSchema ? nil : tool.outputJSONSchema
         )
         let outputItem = ToolCallOutputItem(agent: agent, rawItem: rawOutput, output: guarded.output, toolOrigin: getFunctionToolOrigin(tool))
+        toolOutputCommitter?(outputItem)
         var customData = toolContext.customData
         if let extractor = tool.customDataExtractor {
             let extracted = try await extractor(FunctionToolCustomDataContext(toolContext: toolContext, tool: tool, output: guarded.output, rawItem: rawOutput))
@@ -314,12 +317,28 @@ struct FunctionToolBatchExecutor {
 /// Runs hosted MCP approval callbacks and returns approval response items.
 func executeMCPApprovalRequests(agent: Agent, requests: [ToolRunMCPApprovalRequest], contextWrapper: RunContextWrapper) async throws -> [RunItem] {
     var items: [RunItem] = []
-    for request in requests {
+    for request in try preflightMCPApprovalRequests(requests).requests {
         let requestItem = request.requestItem
-        let approvalItem = ToolApprovalItem(agent: agent, rawItem: requestItem.json, toolName: requestItem.name)
-        var status = try contextWrapper.getApprovalStatus(toolName: requestItem.name, callId: requestItem.id, existingPending: approvalItem)
-        var reason = contextWrapper.getRejectionMessage(toolName: requestItem.name, callId: requestItem.id, existingPending: approvalItem)
-        if status == nil, let callback = request.mcpTool.onApprovalRequest {
+        let approvalItem = ToolApprovalItem(agent: agent, rawItem: requestItem.json, toolName: requestItem.json.string("name"))
+        let toolName = approvalItem.toolName ?? ""
+        var status = try contextWrapper.getApprovalStatus(
+            toolName: toolName, callId: requestItem.id, existingPending: approvalItem, currentInvocation: approvalItem
+        )
+        var reason = contextWrapper.getRejectionMessage(toolName: toolName, callId: requestItem.id, existingPending: approvalItem)
+        if status == nil {
+            guard let invocation = try contextWrapper.toolInvocationStatus(requestItem.json) else {
+                throw ModelBehaviorError("Hosted MCP approval requests require a canonical invocation identity.")
+            }
+            if invocation.executed {
+                throw ModelBehaviorError(
+                    "A Hosted MCP approval callback already ran, but its response was not committed. "
+                        + "Start a new request instead of retrying the invocation."
+                )
+            }
+            try contextWrapper.markToolInvocationExecuted(requestItem.json)
+            guard let callback = request.mcpTool.onApprovalRequest else {
+                throw UserError("Callback is required for MCP approval requests")
+            }
             let result = try await callback(MCPToolApprovalRequest(ctxWrapper: contextWrapper, data: requestItem))
             status = result.approve
             reason = result.reason
@@ -341,7 +360,52 @@ func executeMCPApprovalRequests(agent: Agent, requests: [ToolRunMCPApprovalReque
     return items
 }
 
-/// Bridges hosted MCP approval requests with manual approvals.
+/// Splits hosted MCP approval requests into callback-handled and manual buckets. Requests without
+/// a canonical identity always need a manual decision.
+func partitionMCPApprovalRequests(_ requests: [ToolRunMCPApprovalRequest]) -> (withCallback: [ToolRunMCPApprovalRequest], manual: [ToolRunMCPApprovalRequest]) {
+    var withCallback: [ToolRunMCPApprovalRequest] = []
+    var manual: [ToolRunMCPApprovalRequest] = []
+    for request in requests {
+        if request.mcpTool.onApprovalRequest != nil, toolInvocationIdentity(request.requestItem.json) != nil {
+            withCallback.append(request)
+        } else {
+            manual.append(request)
+        }
+    }
+    return (withCallback, manual)
+}
+
+/// How a pending approval and the current request should be reconciled.
+private enum HostedMCPPendingResolution {
+    case reusePending
+    case useCurrent
+    case useCurrentWithPendingExact
+    case conflict
+}
+
+/// Chooses the safe identity source when reconciling pending and current requests.
+private func classifyHostedMCPPendingRequest(_ pending: ToolApprovalItem, _ currentRequest: JSONObject) -> HostedMCPPendingResolution {
+    guard let pendingIdentity = getHostedMCPApprovalRequestIdentity(pending.rawItem),
+          let currentIdentity = getHostedMCPApprovalRequestIdentity(currentRequest),
+          let pendingRequestId = pendingIdentity.requestId, let currentRequestId = currentIdentity.requestId,
+          pendingRequestId == currentRequestId else {
+        return .conflict
+    }
+    if let pendingLabel = pendingIdentity.serverLabel, let currentLabel = currentIdentity.serverLabel, pendingLabel != currentLabel {
+        return .conflict
+    }
+    if let pendingToolName = ToolApprovalState.resolveHostedMCPToolName(pending, pendingIdentity),
+       let currentToolName = currentIdentity.toolName, pendingToolName != currentToolName {
+        return .conflict
+    }
+    switch (pendingIdentity.approvalIdentity != nil, currentIdentity.approvalIdentity != nil) {
+    case (true, false): return .useCurrent
+    case (false, true): return .useCurrentWithPendingExact
+    default: return .reusePending
+    }
+}
+
+/// Bridges hosted MCP approval requests with manual approvals to keep state consistent.
 func collectManualMCPApprovals(
     agent: Agent,
     requests: [ToolRunMCPApprovalRequest],
@@ -352,20 +416,44 @@ func collectManualMCPApprovals(
     var pending: [ToolApprovalItem] = []
     var seen: Set<String> = []
     for request in requests {
-        let requestItem = request.requestItem
-        let requestId = requestItem.id
-        if !requestId.isEmpty {
+        let requestItem = request.requestItem.json
+        let requestId = extractMCPRequestId(requestItem)
+        if let requestId, !requestId.isEmpty {
             guard seen.insert(requestId).inserted else { continue }
         }
-        let toolName = requestItem.name.isEmpty ? request.mcpTool.name : requestItem.name
-        let approvalItem = existingPendingByCallId[requestId] ?? ToolApprovalItem(agent: agent, rawItem: requestItem.json, toolName: toolName)
-        let status = try contextWrapper.getApprovalStatus(toolName: toolName, callId: requestId, existingPending: approvalItem)
-        if let status, !requestId.isEmpty {
-            var raw: JSONObject = ["type": "mcp_approval_response", "approval_request_id": .string(requestId), "approve": .bool(status)]
-            if !status, let message = contextWrapper.getRejectionMessage(toolName: toolName, callId: requestId, existingPending: approvalItem) {
-                raw["reason"] = .string(message)
+        let rawName = requestItem.string("name") ?? ""
+        let toolName = rawName.isEmpty ? request.mcpTool.name : rawName
+        let currentItem = ToolApprovalItem(agent: agent, rawItem: requestItem, toolName: toolName)
+        let existing = existingPendingByCallId[requestId ?? ""]
+        if let existing { try contextWrapper.restorePendingApprovalBinding(existing) }
+        var binding = try contextWrapper.approvedToolInvocationStatus(requestItem)
+        let resolution = existing.map { classifyHostedMCPPendingRequest($0, requestItem) } ?? .useCurrent
+        var approvalItem = existing != nil && resolution == .reusePending ? existing ?? currentItem : currentItem
+        let allowPrimaryLegacy = existing != nil && resolution != .conflict && resolution != .useCurrentWithPendingExact
+        var (status, rejectionMessage) = contextWrapper.resolveHostedMCPApprovalDecision(approvalItem, allowLegacyExact: allowPrimaryLegacy)
+        if status == nil, resolution == .useCurrentWithPendingExact {
+            if let existing {
+                (status, rejectionMessage) = contextWrapper.resolveHostedMCPApprovalDecision(existing, allowLegacyExact: true)
             }
-            ItemHelpers.copyToolCallCaller(requestItem.json, into: &raw)
+            if status == nil {
+                (status, rejectionMessage) = contextWrapper.resolveHostedMCPApprovalDecision(currentItem, allowLegacyExact: true)
+            }
+        }
+        if status != nil, binding == nil {
+            binding = try contextWrapper.approvedToolInvocationStatus(requestItem)
+        }
+        if binding == nil { approvalItem = currentItem }
+        if status != nil, let requestId, !requestId.isEmpty {
+            guard let binding else {
+                pending.append(approvalItem)
+                continue
+            }
+            if binding.completed { continue }
+        }
+        if let status, let requestId, !requestId.isEmpty {
+            var raw: JSONObject = ["type": "mcp_approval_response", "approval_request_id": .string(requestId), "approve": .bool(status)]
+            if !status, let rejectionMessage { raw["reason"] = .string(rejectionMessage) }
+            ItemHelpers.copyToolCallCaller(requestItem, into: &raw)
             approved.append(MCPApprovalResponseItem(agent: agent, rawItem: raw))
             continue
         }
@@ -373,6 +461,29 @@ func collectManualMCPApprovals(
         pending.append(approvalItem)
     }
     return (approved, pending)
+}
+
+/// Filters hosted MCP outputs and merges manual approvals so only coherent items remain.
+func processHostedMCPApprovals(
+    originalPreStepItems: [RunItem],
+    mcpApprovalRequests: [ToolRunMCPApprovalRequest],
+    contextWrapper: RunContextWrapper,
+    agent: Agent,
+    appendItem: (RunItem) -> Void
+) throws -> (pending: [ToolApprovalItem], pendingIds: Set<String>) {
+    var hostedApprovalsById: [String: ToolApprovalItem] = [:]
+    for case let item as ToolApprovalItem in originalPreStepItems where getHostedMCPApprovalRequestIdentity(item.rawItem) != nil {
+        if let requestId = extractMCPRequestId(item.rawItem), !requestId.isEmpty {
+            hostedApprovalsById[requestId] = item
+        }
+    }
+    let resumedRequests = mcpApprovalRequests.filter { extractMCPRequestId($0.requestItem.json).map { hostedApprovalsById[$0] != nil } ?? false }
+    let (responses, pending) = try collectManualMCPApprovals(
+        agent: agent, requests: resumedRequests, contextWrapper: contextWrapper, existingPendingByCallId: hostedApprovalsById
+    )
+    responses.forEach(appendItem)
+    pending.forEach(appendItem)
+    return (pending, Set(pending.compactMap { extractMCPRequestId($0.rawItem) }))
 }
 
 /// Builds a mapping of tool call IDs to pending approval items.
@@ -438,8 +549,7 @@ func buildPlanForFreshTurn(
     contextWrapper: RunContextWrapper,
     approvalItemsByCallId: [String: ToolApprovalItem]
 ) throws -> ToolExecutionPlan {
-    let withCallback = processed.mcpApprovalRequests.filter { $0.mcpTool.onApprovalRequest != nil }
-    let manual = processed.mcpApprovalRequests.filter { $0.mcpTool.onApprovalRequest == nil }
+    let (withCallback, manual) = partitionMCPApprovalRequests(processed.mcpApprovalRequests)
     let (approved, pending) = try collectManualMCPApprovals(
         agent: agent, requests: manual, contextWrapper: contextWrapper, existingPendingByCallId: approvalItemsByCallId
     )
@@ -463,11 +573,12 @@ func executeToolPlan(
     allTools: [any Tool],
     hooks: RunHooks,
     contextWrapper: RunContextWrapper,
-    runConfig: RunConfig
+    runConfig: RunConfig,
+    toolOutputCommitter: ToolOutputCommitter? = nil
 ) async throws -> ToolPlanResults {
     async let functions = FunctionToolBatchExecutor(
         agent: agent, toolRuns: plan.functionRuns, hooks: hooks, contextWrapper: contextWrapper,
-        config: runConfig, availableFunctionTools: allTools
+        config: runConfig, availableFunctionTools: allTools, toolOutputCommitter: toolOutputCommitter
     ).execute()
     async let computers: [RunItem] = {
         var items: [RunItem] = []
@@ -489,7 +600,7 @@ func executeToolPlan(
             }
             items.append(try await ComputerAction.execute(
                 agent: agent, action: action, hooks: hooks, contextWrapper: contextWrapper,
-                config: runConfig, acknowledgedSafetyChecks: acknowledged
+                config: runConfig, acknowledgedSafetyChecks: acknowledged, toolOutputCommitter: toolOutputCommitter
             ))
         }
         return items
@@ -497,28 +608,36 @@ func executeToolPlan(
     async let customs: [RunItem] = {
         var items: [RunItem] = []
         for call in plan.customToolCalls {
-            items.append(try await CustomToolAction.execute(agent: agent, call: call, hooks: hooks, contextWrapper: contextWrapper, config: runConfig))
+            items.append(try await CustomToolAction.execute(
+                agent: agent, call: call, hooks: hooks, contextWrapper: contextWrapper, config: runConfig, toolOutputCommitter: toolOutputCommitter
+            ))
         }
         return items
     }()
     async let shells: [RunItem] = {
         var items: [RunItem] = []
         for call in plan.shellCalls {
-            items.append(try await ShellAction.execute(agent: agent, call: call, hooks: hooks, contextWrapper: contextWrapper, config: runConfig))
+            items.append(try await ShellAction.execute(
+                agent: agent, call: call, hooks: hooks, contextWrapper: contextWrapper, config: runConfig, toolOutputCommitter: toolOutputCommitter
+            ))
         }
         return items
     }()
     async let patches: [RunItem] = {
         var items: [RunItem] = []
         for call in plan.applyPatchCalls {
-            items.append(try await ApplyPatchAction.execute(agent: agent, call: call, hooks: hooks, contextWrapper: contextWrapper, config: runConfig))
+            items.append(try await ApplyPatchAction.execute(
+                agent: agent, call: call, hooks: hooks, contextWrapper: contextWrapper, config: runConfig, toolOutputCommitter: toolOutputCommitter
+            ))
         }
         return items
     }()
     async let localShells: [RunItem] = {
         var items: [RunItem] = []
         for call in plan.localShellCalls {
-            items.append(try await LocalShellAction.execute(agent: agent, call: call, hooks: hooks, contextWrapper: contextWrapper, config: runConfig))
+            items.append(try await LocalShellAction.execute(
+                agent: agent, call: call, hooks: hooks, contextWrapper: contextWrapper, config: runConfig, toolOutputCommitter: toolOutputCommitter
+            ))
         }
         return items
     }()

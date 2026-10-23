@@ -134,15 +134,23 @@ func buildRunStateFromJSON(
         strictContext: strictContext
     )
     context.usage = usage
-    context.rebuildApprovals(contextData["approvals"]?.objectValue ?? [:])
-    if schema >= (1, 15), (contextData["tool_invocations"] ?? [:]).objectValue == nil {
-        // Swift: the canonical tool invocation ledger is not ported yet, so only its shape is checked.
-        throw UserError("RunState tool_invocations must be a mapping.")
+    try context.toolStateBox.mutate { state in
+        state.restoredUnboundApprovalCallIds = []
+        state.allowLegacyApprovalBindingReconstruction = schema < (1, 15)
+        state.rebuildApprovals(contextData["approvals"])
+        if schema >= (1, 15) {
+            try state.rebuildToolInvocations(contextData["tool_invocations"] ?? [:]) { UserError($0) }
+        } else {
+            state.toolInvocations = [:]
+        }
+        if schema >= runStateSchemaVersionTuple(RunState.hostedMCPApprovalsMinSchemaVersion) {
+            state.rebuildHostedMCPApprovals(contextData["hosted_mcp_approvals"])
+        }
+        try restoreFunctionToolApprovals(contextData["function_tool_approvals"], schema: schema, state: &state, agents: agents)
+        if schema >= (1, 15) {
+            state.markRestoredUnboundApprovalCallIds()
+        }
     }
-    if schema >= runStateSchemaVersionTuple(RunState.hostedMCPApprovalsMinSchemaVersion) {
-        context.rebuildHostedMCPApprovals(contextData["hosted_mcp_approvals"])
-    }
-    try restoreFunctionToolApprovals(contextData["function_tool_approvals"], schema: schema, context: context, agents: agents)
     if contextOverride == nil, let toolInput = contextData["tool_input"], !toolInput.isNull, context.toolInput == nil {
         context.toolInput = toolInput
     }
@@ -220,6 +228,7 @@ func buildRunStateFromJSON(
     state.generatedPromptCacheKey = stateJSON.string("generated_prompt_cache_key")
     state.setToolUseTrackerSnapshot(toolUseTrackerSnapshot(from: stateJSON["tool_use_tracker"]))
     state.traceState = TraceState.fromJSON(stateJSON["trace"]?.objectValue)
+    try state.validateCompletedToolInvocations(reconstructLegacy: schema < (1, 15))
     return state
 }
 
@@ -289,6 +298,9 @@ private func restoreCurrentStep(_ state: RunState, _ stepData: JSONObject?, agen
         }
         let responseAccepted = data["response_accepted"]?.isTruthy ?? false
         state.currentStep = .interruption(interruptions: interruptions, responseAccepted: responseAccepted)
+        state.context.toolStateBox.mutate { context in
+            for item in interruptions { context.markRestoredUnboundPendingApproval(item) }
+        }
         state.llmEndHooksStarted = data["llm_end_hooks_started"]?.isTruthy ?? true
         if responseAccepted {
             state.clearGeneratedItemsLastProcessedMarker()
@@ -376,38 +388,8 @@ private func contextMetaWarningMessage(_ meta: JSONObject?) -> String {
     return "RunState context requires explicit restoration; provide context_deserializer or context_override to restore it."
 }
 
-extension RunContextWrapper {
-    /// Restores typed hosted MCP approval records from serialized state.
-    func rebuildHostedMCPApprovals(_ approvals: JSONValue?) {
-        guard let entries = approvals?.arrayValue else { return }
-        approvalsBox.mutate { records in
-            for entry in entries {
-                guard let entry = entry.objectValue, let identity = entry["identity"]?.objectValue,
-                      let decision = entry["decision"]?.objectValue else { continue }
-                let key: String
-                switch identity.string("type") {
-                case "server_tool":
-                    guard let label = identity.string("server_label"), !label.isEmpty,
-                          let tool = identity.string("tool_name"), !tool.isEmpty else { continue }
-                    key = "hosted_mcp:\(label):\(tool)"
-                case "request":
-                    guard let requestId = identity.string("request_id"), !requestId.isEmpty else { continue }
-                    key = "hosted_mcp_call:\(requestId)"
-                default:
-                    // Swift: per-query hosted MCP decisions are not modeled yet.
-                    continue
-                }
-                records[key] = ApprovalRecord(json: decision)
-            }
-        }
-    }
-}
-
 /// Validates and restores agent-owned function approvals.
-///
-/// Swift: approvals are keyed by tool name rather than by owning agent (see porting/manifest.json),
-/// so a restored decision applies to every agent that owns a tool with that key.
-private func restoreFunctionToolApprovals(_ value: JSONValue?, schema: (Int, Int), context: RunContextWrapper, agents: RunStateAgentResolver) throws {
+private func restoreFunctionToolApprovals(_ value: JSONValue?, schema: (Int, Int), state: inout ToolApprovalState, agents: RunStateAgentResolver) throws {
     let entries: [JSONValue]
     switch value {
     case nil, .null?: entries = []
@@ -427,7 +409,7 @@ private func restoreFunctionToolApprovals(_ value: JSONValue?, schema: (Int, Int
         }
         // Traversal-derived suffixes cannot authorize indistinguishable owners.
         if ambiguous.contains(ObjectIdentifier(owner)) { continue }
-        context.approvals[toolKey] = ApprovalRecord(json: decision)
+        state.approvals[.function(FunctionToolApprovalKey(owner: owner, toolKey: toolKey))] = ApprovalRecord(json: decision)
     }
 }
 

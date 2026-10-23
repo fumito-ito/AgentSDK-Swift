@@ -42,9 +42,9 @@
       "notes": ""
     },
     "src/agents/_public_agent.py": {
-      "status": "pending",
+      "status": "skipped",
       "swift": [],
-      "notes": ""
+      "notes": "Only sandbox execution clones set a public agent, and sandbox is out of scope (D2); approvals use the item's agent."
     },
     "src/agents/_run_state_agent_identity.py": {
       "status": "ported",
@@ -61,9 +61,11 @@
       "notes": ""
     },
     "src/agents/_tool_invocation.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/ToolInvocation.swift"
+      ],
+      "notes": "Digests hash the same text as upstream, so Python-written invocation ledgers validate in Swift."
     },
     "src/agents/agent.py": {
       "status": "partial",
@@ -816,9 +818,10 @@
     "src/agents/run_context.py": {
       "status": "partial",
       "swift": [
-        "Sources/Agents/RunContext.swift"
+        "Sources/Agents/RunContext.swift",
+        "Sources/Agents/RunContextApprovals.swift"
       ],
-      "notes": "Approval candidate keys simplified; agent-scoped approval owners not ported."
+      "notes": "Approval records, agent-owned function keys, hosted MCP typed keys, and the invocation ledger are ported (D16). Skipped: detached owner keys for pydantic/Temporal context converters. Pending: agent_tool_state scope on checkpoint copies."
     },
     "src/agents/run_error_handlers.py": {
       "status": "ported",
@@ -950,7 +953,7 @@
       "swift": [
         "Sources/Agents/RunInternal/ToolActions.swift"
       ],
-      "notes": ""
+      "notes": "Native tools mark their invocation executed and commit outputs through the resume checkpoint."
     },
     "src/agents/run_internal/tool_caller.py": {
       "status": "pending",
@@ -962,14 +965,15 @@
       "swift": [
         "Sources/Agents/RunInternal/ToolExecution.swift"
       ],
-      "notes": "Invocation de-duplication ledger not ported."
+      "notes": "Function tools, hosted MCP callbacks, manual MCP reconciliation, and process_hosted_mcp_approvals use the invocation ledger. Pending: FunctionToolApproval argument preparation (check_invocation), nested agent-tool interruption routing, and sibling cancellation bookkeeping."
     },
     "src/agents/run_internal/tool_planning.py": {
       "status": "partial",
       "swift": [
+        "Sources/Agents/RunInternal/ToolPlanning.swift",
         "Sources/Agents/RunInternal/ToolExecution.swift"
       ],
-      "notes": "Invocation de-duplication ledger not ported."
+      "notes": "Invocation registration, response de-duplication, MCP preflight, and plan building are ported. Swift tool runs keep a reference to their call item in place of upstream's shared raw item identity. Native tool approvals are evaluated inside each action instead of _collect_runs_by_approval."
     },
     "src/agents/run_internal/tool_use_tracker.py": {
       "status": "ported",
@@ -990,16 +994,17 @@
       "swift": [
         "Sources/Agents/RunInternal/TurnResolution.swift"
       ],
-      "notes": "PTC parent validation and blocked-output replacement not ported."
+      "notes": "Fresh and resumed turns validate invocations against the ledger, and resumed tool outputs are checkpointed into the RunState as they finish. Pending: resume-time reconciliation of interrupted calls against the current tool inventory (only unqueued custom tool approvals are resolved), response_accepted resume, PTC parent validation, and blocked-output replacement."
     },
     "src/agents/run_state.py": {
       "status": "partial",
       "swift": [
         "Sources/Agents/RunState.swift",
         "Sources/Agents/RunStateSerialization.swift",
-        "Sources/Agents/RunStateDeserialization.swift"
+        "Sources/Agents/RunStateDeserialization.swift",
+        "Sources/Agents/RunStateInvocationValidation.swift"
       ],
-      "notes": "JSON serialization (schema 1.18) ported (D13). Pending: tool invocation ledger (tool_invocations is written empty), agent-owned function approvals (restored into tool-name approvals), hosted MCP query records, nested agent-tool run states, nested history ownership retention (validated, then dropped), pending Session writes, terminal-unrecoverable marker, programmatic tool calling resume checks, current-response item identity restore, error redaction, and sandbox payloads (out of scope)."
+      "notes": "JSON serialization (schema 1.18) ported (D13), including the tool invocation ledger, agent-owned function approvals, hosted MCP query records, and completed-invocation validation with legacy reconstruction. Pending: nested agent-tool run states, nested history ownership retention (validated, then dropped), pending Session writes, terminal-unrecoverable marker, programmatic tool calling resume checks, current-response item identity restore, error redaction, and sandbox payloads (out of scope)."
     },
     "src/agents/sandbox/__init__.py": {
       "status": "out_of_scope",
@@ -3221,9 +3226,11 @@
       "notes": ""
     },
     "tests/test_agent_scoped_approvals.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/AgentScopedApprovalsTests.swift"
+      ],
+      "notes": "Skipped: pydantic/Temporal context converter round trips and the sandbox operation case. Runner cases that convert the context are ported with the wrapper reused directly; the copy.copy owner case has no Swift equivalent."
     },
     "tests/test_agent_tool_enablement_snapshot.py": {
       "status": "pending",
@@ -3701,9 +3708,11 @@
       "notes": "Sandbox and dict-only cases skipped."
     },
     "tests/test_run_context_approvals.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/RunContextApprovalsTests.swift"
+      ],
+      "notes": "The non-string approval key case is dropped because JSON object keys are strings."
     },
     "tests/test_run_context_wrapper.py": {
       "status": "ported",
@@ -3764,9 +3773,10 @@
         "Tests/AgentsTests/RunStateTests+Resumption.swift",
         "Tests/AgentsTests/RunStateTests+SerializationEdgeCases.swift",
         "Tests/AgentsTests/RunStateTests+SchemaEdgeCases.swift",
-        "Tests/AgentsTests/RunStateTests+ToolApprovalItem.swift"
+        "Tests/AgentsTests/RunStateTests+ToolApprovalItem.swift",
+        "Tests/AgentsTests/RunStateTests+InvocationLedger.swift"
       ],
-      "notes": "Pending until their modules are ported: tool invocation ledger and hosted MCP query approval cases, nested agent-tool state cases (agent_tool_state.py), programmatic tool calling resume checks (tool_caller.py), and nested history ownership round trips. Skipped: pydantic/deepcopy snapshot cases, Python truthiness, bare string input items, ad-hoc tool attributes, and sandbox cases (out of scope). Each file lists the cases at its top."
+      "notes": "Pending until their modules are ported: nested agent-tool state cases (agent_tool_state.py), programmatic tool calling resume checks (tool_caller.py), and nested history ownership round trips. Skipped: pydantic/deepcopy snapshot cases, Python truthiness, bare string input items, ad-hoc tool attributes, and sandbox cases (out of scope). Each file lists the cases at its top."
     },
     "tests/test_run_state_agent_identity.py": {
       "status": "ported",
@@ -3907,9 +3917,16 @@
       "notes": "pytest environment checks."
     },
     "tests/test_tool_approval_call_id_reuse.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/ToolApprovalCallIdReuseTests.swift",
+        "Tests/AgentsTests/ToolApprovalCallIdReuseTests+NativeTools.swift",
+        "Tests/AgentsTests/ToolApprovalCallIdReuseTests+Lifecycle.swift",
+        "Tests/AgentsTests/ToolApprovalCallIdReuseTests+Bindings.swift",
+        "Tests/AgentsTests/ToolApprovalCallIdReuseTests+Snapshots.swift",
+        "Tests/AgentsTests/ToolApprovalCallIdReuseTests+HostedMCP.swift"
+      ],
+      "notes": "Skipped: pydantic model_dump cases. Pending: nested agent-tool cases (agent_tool_state.py) and custom tool resume against the current tool inventory. test_legacy_changed_pending_call_fails_before_approval_callback checks the approval lookup directly because _collect_runs_by_approval is not a Swift helper."
     },
     "tests/test_tool_choice_reset.py": {
       "status": "ported",

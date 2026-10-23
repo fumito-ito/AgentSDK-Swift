@@ -177,6 +177,9 @@ public final class Agent: AgentBase, @unchecked Sendable {
     /// Whether to reset the tool choice to the default after a tool has been called, to avoid
     /// infinite tool loops.
     public var resetToolChoice: Bool
+    /// Identifies this instance as the owner of its function-tool approval decisions (upstream
+    /// `_function_approval_identity`). Clones get a new token, so they need fresh decisions.
+    let functionApprovalToken = UUID().uuidString
 
     public init(
         name: String,

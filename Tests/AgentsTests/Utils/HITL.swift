@@ -16,6 +16,15 @@ func makeShellCall(_ callId: String, idValue: String? = nil, commands: [String]?
     ]
 }
 
+/// Creates an apply_patch_call payload.
+func makeApplyPatchDict(_ callId: String, diff: String = "-a\n+b\n") -> TResponseOutputItem {
+    [
+        "type": "apply_patch_call",
+        "call_id": .string(callId),
+        "operation": ["type": "update_file", "path": "test.md", "diff": .string(diff)],
+    ]
+}
+
 /// Editor that records operations for testing.
 final class RecordingEditor: ApplyPatchEditor, @unchecked Sendable {
     private let lock = NSLock()

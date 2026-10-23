@@ -65,6 +65,8 @@ public struct ApprovalRecord: Sendable, Equatable {
     public var rejected: Decision = .callIds([])
     public var rejectionMessages: [String: String] = [:]
     public var stickyRejectionMessage: String?
+    /// The approval scope a sticky decision was made for, so it cannot authorize another tool.
+    public var stickyScope: String?
 
     public init() {}
 
@@ -107,6 +109,9 @@ public struct ApprovalRecord: Sendable, Equatable {
         if let stickyRejectionMessage {
             json["sticky_rejection_message"] = .string(stickyRejectionMessage)
         }
+        if let stickyScope {
+            json["sticky_scope"] = .string(stickyScope)
+        }
         return json
     }
 
@@ -117,6 +122,7 @@ public struct ApprovalRecord: Sendable, Equatable {
             rejectionMessages = messages.dictionary.compactMapValues(\.stringValue)
         }
         stickyRejectionMessage = json.string("sticky_rejection_message")
+        stickyScope = json.string("sticky_scope")
     }
 }
 
@@ -132,7 +138,7 @@ open class RunContextWrapper: @unchecked Sendable {
     public var context: any Sendable
 
     let usageBox: SharedBox<Usage>
-    let approvalsBox: SharedBox<[String: ApprovalRecord]>
+    let toolStateBox: SharedBox<ToolApprovalState>
 
     /// The usage of the agent run so far. Forked contexts (for example `ToolContext`) share it.
     public var usage: Usage {
@@ -149,20 +155,20 @@ open class RunContextWrapper: @unchecked Sendable {
     public init(context: any Sendable = (), usage: Usage = Usage(), turnInput: [TResponseInputItem] = []) {
         self.context = context
         self.usageBox = SharedBox(usage)
-        self.approvalsBox = SharedBox([:])
+        self.toolStateBox = SharedBox(ToolApprovalState())
         self.turnInput = turnInput
     }
 
     init(
         context: any Sendable,
         usageBox: SharedBox<Usage>,
-        approvalsBox: SharedBox<[String: ApprovalRecord]>,
+        toolStateBox: SharedBox<ToolApprovalState>,
         turnInput: [TResponseInputItem],
         toolInput: (any Sendable)?
     ) {
         self.context = context
         self.usageBox = usageBox
-        self.approvalsBox = approvalsBox
+        self.toolStateBox = toolStateBox
         self.turnInput = turnInput
         self.toolInput = toolInput
     }
@@ -179,14 +185,22 @@ open class RunContextWrapper: @unchecked Sendable {
 
     // MARK: - Approvals
 
-    var approvals: [String: ApprovalRecord] {
-        get { approvalsBox.value }
-        set { approvalsBox.value = newValue }
+    var approvals: [ApprovalKey: ApprovalRecord] {
+        get { toolStateBox.value.approvals }
+        set { toolStateBox.mutate { $0.approvals = newValue } }
+    }
+
+    var toolInvocations: [String: ToolInvocationRecord] {
+        get { toolStateBox.value.toolInvocations }
+        set { toolStateBox.mutate { $0.toolInvocations = newValue } }
     }
 
     static func resolveToolName(_ item: ToolApprovalItem) -> String {
         if let name = item.toolName, !name.isEmpty { return name }
-        return item.rawItem.string("name") ?? item.rawItem.string("type") ?? "unknown_tool"
+        let raw = item.rawItem
+        if let name = raw.string("name"), !name.isEmpty { return name }
+        if let type = raw.string("type"), !type.isEmpty { return type }
+        return "unknown_tool"
     }
 
     static func resolveToolNamespace(_ item: ToolApprovalItem) -> String? {
@@ -194,19 +208,38 @@ open class RunContextWrapper: @unchecked Sendable {
         return item.rawItem.string("namespace")
     }
 
+    static func resolveToolLookupKey(_ item: ToolApprovalItem) -> FunctionToolLookupKey? {
+        if let key = item.toolLookupKey { return key }
+        guard item.rawItem.type == "function_call" else { return nil }
+        let name = resolveToolName(item)
+        let namespace = resolveToolNamespace(item)
+        if isReservedSyntheticToolNamespace(name, namespace) { return nil }
+        return getFunctionToolLookupKey(name, namespace)
+    }
+
+    /// Returns all approval keys that should mirror this approval record.
     static func resolveApprovalKeys(_ item: ToolApprovalItem) -> [String] {
-        let keys = getFunctionToolApprovalKeys(
+        let lookupKey = resolveToolLookupKey(item)
+        return getFunctionToolApprovalKeys(
             toolName: resolveToolName(item),
             toolNamespace: resolveToolNamespace(item),
             allowBareNameAlias: item.allowBareNameAlias,
-            toolLookupKey: item.toolLookupKey,
-            preferLegacySameNameNamespace: item.toolLookupKey == nil
+            toolLookupKey: lookupKey,
+            preferLegacySameNameNamespace: lookupKey == nil
         )
-        return keys.isEmpty ? [resolveToolName(item)] : keys
     }
 
     static func resolveApprovalKey(_ item: ToolApprovalItem) -> String {
-        resolveApprovalKeys(item).last ?? resolveToolName(item)
+        let toolName = resolveToolName(item)
+        let toolNamespace = resolveToolNamespace(item)
+        let lookupKey = resolveToolLookupKey(item)
+        let keys = getFunctionToolApprovalKeys(
+            toolName: toolName,
+            toolNamespace: toolNamespace,
+            toolLookupKey: lookupKey,
+            preferLegacySameNameNamespace: lookupKey == nil
+        )
+        return keys.last ?? toolQualifiedName(toolName, namespace: toolNamespace) ?? toolName
     }
 
     static func resolveCallId(_ item: ToolApprovalItem) -> String? {
@@ -218,110 +251,141 @@ open class RunContextWrapper: @unchecked Sendable {
            let id = providerData.string("id") {
             return id
         }
-        if raw.type == "mcp_approval_request" { return raw.string("id") }
-        if let callId = raw.string("call_id") { return callId }
-        if raw.type == nil { return raw.string("id") }
-        return nil
-    }
-
-    private static func hostedApprovalKeys(_ item: ToolApprovalItem) -> (exact: String, sticky: String?)? {
-        guard let hosted = getHostedMCPApprovalRequestIdentity(item.rawItem), let requestId = hosted.requestId else {
-            return nil
+        var candidate = raw.type == "mcp_approval_request" ? raw["id"] : raw["call_id"]
+        if candidate == nil || candidate == .null, raw.type == nil {
+            candidate = raw["id"]
         }
-        let sticky = hosted.approvalIdentity.map { "hosted_mcp:\($0.serverLabel):\($0.toolName)" }
-        return ("hosted_mcp_call:\(requestId)", sticky)
-    }
-
-    private func applyDecision(_ item: ToolApprovalItem, always: Bool, approve: Bool, rejectionMessage: String?) throws {
-        let callId: String?
-        let keys: [String]
-        if let hosted = Self.hostedApprovalKeys(item) {
-            callId = getHostedMCPApprovalRequestIdentity(item.rawItem)?.requestId
-            if always, hosted.sticky == nil {
-                throw UserError(
-                    "Persistent hosted MCP approval decisions require a non-empty server_label and tool name."
-                )
-            }
-            keys = [hosted.sticky ?? hosted.exact]
-        } else {
-            callId = Self.resolveCallId(item)
-            let rawCallId = item.rawItem["call_id"]?.stringValue ?? item.rawItem.string("id")
-            if rawCallId == "", !always {
-                throw ModelBehaviorError("Per-call approval decisions require a non-empty call ID.")
-            }
-            let approvalKeys = Self.resolveApprovalKeys(item)
-            keys = (always || callId == nil) ? [Self.resolveApprovalKey(item)] : approvalKeys
-        }
-
-        approvalsBox.mutate { approvals in
-            for key in keys {
-                var record = approvals[key] ?? ApprovalRecord()
-                if always || callId == nil {
-                    record.approved = .all(approve)
-                    record.rejected = approve ? .callIds([]) : .all(true)
-                    if !approve {
-                        if let rejectionMessage, let callId {
-                            record.rejectionMessages[callId] = rejectionMessage
-                        } else if let callId {
-                            record.rejectionMessages.removeValue(forKey: callId)
-                        }
-                        record.stickyRejectionMessage = rejectionMessage
-                    } else {
-                        record.rejectionMessages.removeAll()
-                        record.stickyRejectionMessage = nil
-                    }
-                } else if let callId {
-                    if approve {
-                        if case .callIds(var ids) = record.rejected {
-                            ids.removeAll { $0 == callId }
-                            record.rejected = .callIds(ids)
-                        }
-                        if record.approved != .all(true) {
-                            var ids = record.approved.callIds ?? []
-                            if !ids.contains(callId) { ids.append(callId) }
-                            record.approved = .callIds(ids)
-                        }
-                        record.rejectionMessages.removeValue(forKey: callId)
-                    } else {
-                        if case .callIds(var ids) = record.approved {
-                            ids.removeAll { $0 == callId }
-                            record.approved = .callIds(ids)
-                        }
-                        if record.rejected != .all(true) {
-                            var ids = record.rejected.callIds ?? []
-                            if !ids.contains(callId) { ids.append(callId) }
-                            record.rejected = .callIds(ids)
-                        }
-                        if let rejectionMessage {
-                            record.rejectionMessages[callId] = rejectionMessage
-                        } else {
-                            record.rejectionMessages.removeValue(forKey: callId)
-                        }
-                    }
-                }
-                approvals[key] = record
-            }
+        switch candidate {
+        case .string(let text)?: return text
+        case nil, .null?: return nil
+        case let value?: return value.jsonString()
         }
     }
 
     /// Approves a tool call, optionally for all future calls of the same tool.
+    ///
+    /// Permanent function-tool decisions apply only to the approval item's agent.
     public func approveTool(_ approvalItem: ToolApprovalItem, alwaysApprove: Bool = false) throws {
-        try applyDecision(approvalItem, always: alwaysApprove, approve: true, rejectionMessage: nil)
+        try toolStateBox.mutate { try $0.applyApprovalDecision(approvalItem, always: alwaysApprove, approve: true) }
     }
 
     /// Rejects a tool call, optionally for all future calls of the same tool.
+    ///
+    /// Permanent function-tool decisions apply only to the approval item's agent.
     public func rejectTool(_ approvalItem: ToolApprovalItem, alwaysReject: Bool = false, rejectionMessage: String? = nil) throws {
-        try applyDecision(approvalItem, always: alwaysReject, approve: false, rejectionMessage: rejectionMessage)
+        try toolStateBox.mutate {
+            try $0.applyApprovalDecision(approvalItem, always: alwaysReject, approve: false, rejectionMessage: rejectionMessage)
+        }
     }
 
-    private func candidateKeys(toolName: String, toolNamespace: String?, existingPending: ToolApprovalItem?, toolLookupKey: FunctionToolLookupKey?) -> [String] {
+    /// Resolves an execution decision using its current or pending invocation.
+    ///
+    /// Agent-owned function decisions require an invocation carrying the agent. Use
+    /// `isToolApproved` for name-only inspection of an unambiguous function decision.
+    public func getApprovalStatus(
+        toolName: String,
+        callId: String,
+        toolNamespace: String? = nil,
+        existingPending: ToolApprovalItem? = nil,
+        toolLookupKey: FunctionToolLookupKey? = nil,
+        currentInvocation: ToolApprovalItem? = nil
+    ) throws -> Bool? {
+        try toolStateBox.mutate {
+            try $0.getApprovalStatus(
+                toolName: toolName,
+                callId: callId,
+                toolNamespace: toolNamespace,
+                existingPending: existingPending,
+                toolLookupKey: toolLookupKey,
+                currentInvocation: currentInvocation
+            )
+        }
+    }
+
+    /// Returns `true`/`false`/`nil` for the given tool call.
+    public func isToolApproved(toolName: String, callId: String) -> Bool? {
+        toolStateBox.value.isToolApproved(toolName: toolName, callId: callId)
+    }
+
+    /// Returns a stored rejection message for a tool call if one exists.
+    public func getRejectionMessage(
+        toolName: String,
+        callId: String,
+        toolNamespace: String? = nil,
+        existingPending: ToolApprovalItem? = nil,
+        toolLookupKey: FunctionToolLookupKey? = nil
+    ) -> String? {
+        toolStateBox.mutate {
+            $0.getRejectionMessage(
+                toolName: toolName,
+                callId: callId,
+                toolNamespace: toolNamespace,
+                existingPending: existingPending,
+                toolLookupKey: toolLookupKey
+            )
+        }
+    }
+
+    /// Restores approvals from serialized state.
+    func rebuildApprovals(_ approvals: JSONValue?) {
+        toolStateBox.mutate { $0.rebuildApprovals(approvals) }
+    }
+
+    // MARK: - Forks
+
+    /// Creates a child context that shares approvals and usage, with tool input set.
+    public func forkWithToolInput(_ toolInput: (any Sendable)?) -> RunContextWrapper {
+        RunContextWrapper(context: context, usageBox: usageBox, toolStateBox: toolStateBox, turnInput: turnInput, toolInput: toolInput)
+    }
+
+    /// Creates a child context that shares approvals and usage without tool input.
+    public func forkWithoutToolInput() -> RunContextWrapper {
+        RunContextWrapper(context: context, usageBox: usageBox, toolStateBox: toolStateBox, turnInput: turnInput, toolInput: nil)
+    }
+
+    /// Copies SDK-owned state for an independently resumable checkpoint.
+    func copyForRunState() -> RunContextWrapper {
+        RunContextWrapper(
+            context: context,
+            usageBox: SharedBox(usage),
+            toolStateBox: SharedBox(toolStateBox.value),
+            turnInput: turnInput,
+            toolInput: toolInput
+        )
+    }
+}
+
+/// Context passed to agent hooks (`on_start`, `on_end`).
+public final class AgentHookContext: RunContextWrapper, @unchecked Sendable {
+    /// Creates a hook context that shares usage and approvals with `wrapper`.
+    public init(from wrapper: RunContextWrapper) {
+        super.init(
+            context: wrapper.context,
+            usageBox: wrapper.usageBox,
+            toolStateBox: wrapper.toolStateBox,
+            turnInput: wrapper.turnInput,
+            toolInput: wrapper.toolInput
+        )
+    }
+}
+
+// MARK: - Decisions
+
+extension ToolApprovalState {
+    /// Builds approval-key candidates in upstream order for status and rejection lookups.
+    private static func candidateKeys(
+        toolName: String,
+        toolNamespace: String?,
+        existingPending: ToolApprovalItem?,
+        toolLookupKey: FunctionToolLookupKey?
+    ) -> [String] {
         var candidates: [String] = []
         func add(_ key: String) {
             if !candidates.contains(key) { candidates.append(key) }
         }
         let explicitNamespace = (toolNamespace?.isEmpty ?? true) ? nil : toolNamespace
-        let pendingNamespace = existingPending.flatMap(Self.resolveToolNamespace)
-        let pendingKey = existingPending.map(Self.resolveApprovalKey)
+        let pendingNamespace = existingPending.flatMap(RunContextWrapper.resolveToolNamespace)
+        let pendingKey = existingPending.map(RunContextWrapper.resolveApprovalKey)
         if let pendingKey { add(pendingKey) }
         var explicitKeys: [String] = []
         if explicitNamespace != nil || toolLookupKey != nil {
@@ -333,118 +397,291 @@ open class RunContextWrapper: @unchecked Sendable {
             )
         }
         explicitKeys.forEach(add)
-        if explicitKeys.isEmpty, pendingNamespace != nil, let pendingKey { add(pendingKey) }
+        if explicitKeys.isEmpty, pendingNamespace?.isEmpty == false, let pendingKey { add(pendingKey) }
         if explicitNamespace == nil, toolLookupKey == nil, existingPending == nil { add(toolName) }
         if let existingPending {
-            Self.resolveApprovalKeys(existingPending).forEach(add)
-            if pendingNamespace == nil { add(Self.resolveToolName(existingPending)) }
+            RunContextWrapper.resolveApprovalKeys(existingPending).forEach(add)
+            if pendingNamespace == nil { add(RunContextWrapper.resolveToolName(existingPending)) }
         }
         return candidates
     }
 
-    /// Resolves the approval decision for a tool call: `true`, `false`, or `nil` when undecided.
-    public func getApprovalStatus(
+    func isToolApproved(toolName: String, callId: String) -> Bool? {
+        if let status = approvals[.hostedMCPQuery(toolName: toolName, requestId: callId)]?.perCallStatus(for: callId) {
+            return status
+        }
+        for keyed in approvalRecordsForKey(toolName, callId: callId) {
+            if let status = keyed.record.status(for: callId) { return status }
+        }
+        return nil
+    }
+
+    mutating func getRejectionMessage(
         toolName: String,
         callId: String,
-        toolNamespace: String? = nil,
-        existingPending: ToolApprovalItem? = nil,
-        toolLookupKey: FunctionToolLookupKey? = nil
+        toolNamespace: String?,
+        existingPending: ToolApprovalItem?,
+        toolLookupKey: FunctionToolLookupKey?
+    ) -> String? {
+        if let existingPending, getHostedMCPApprovalRequestIdentity(existingPending.rawItem) != nil {
+            return resolveHostedMCPApprovalDecision(existingPending).rejectionMessage
+        }
+        if let record = approvals[.hostedMCPQuery(toolName: toolName, requestId: callId)], record.perCallStatus(for: callId) != nil {
+            return record.rejectionMessage(for: callId)
+        }
+        let candidates = Self.candidateKeys(toolName: toolName, toolNamespace: toolNamespace, existingPending: existingPending, toolLookupKey: toolLookupKey)
+        for candidate in candidates {
+            for keyed in approvalRecordsForKey(candidate, existingPending, callId: callId) where keyed.record.status(for: callId) != nil {
+                return keyed.record.rejectionMessage(for: callId)
+            }
+        }
+        return nil
+    }
+
+    mutating func getApprovalStatus(
+        toolName: String,
+        callId: String,
+        toolNamespace: String?,
+        existingPending: ToolApprovalItem?,
+        toolLookupKey: FunctionToolLookupKey?,
+        currentInvocation: ToolApprovalItem?
     ) throws -> Bool? {
         guard !callId.isEmpty else {
             throw ModelBehaviorError("Approval-gated tool calls require a non-empty call ID.")
         }
-        let approvals = self.approvals
-        if let existingPending, let hosted = Self.hostedApprovalKeys(existingPending) {
-            if let sticky = hosted.sticky, let status = approvals[sticky]?.status(for: callId) {
-                return status
+        if let existingPending {
+            try restorePendingApprovalBinding(existingPending)
+            let pendingIdentity = toolInvocationIdentity(
+                existingPending.rawItem,
+                toolLookupKey: existingPending.toolLookupKey,
+                toolName: existingPending.toolName
+            )
+            if pendingIdentity == nil {
+                if let pendingCallId = RunContextWrapper.resolveCallId(existingPending),
+                   currentInvocation == nil || toolInvocations[pendingCallId] == nil {
+                    restoredUnboundApprovalCallIds.insert(pendingCallId)
+                }
+                if currentInvocation == nil { return nil }
             }
-            return approvals[hosted.exact]?.perCallStatus(for: callId)
-        }
-        for candidate in candidateKeys(toolName: toolName, toolNamespace: toolNamespace, existingPending: existingPending, toolLookupKey: toolLookupKey) {
-            if let status = approvals[candidate]?.status(for: callId) {
-                return status
-            }
-        }
-        return nil
-    }
-
-    /// Returns `true`/`false`/`nil` for the given tool call by tool name.
-    public func isToolApproved(toolName: String, callId: String) -> Bool? {
-        approvals[toolName]?.status(for: callId)
-    }
-
-    /// Returns a stored rejection message for a tool call if one exists.
-    public func getRejectionMessage(
-        toolName: String,
-        callId: String,
-        toolNamespace: String? = nil,
-        existingPending: ToolApprovalItem? = nil,
-        toolLookupKey: FunctionToolLookupKey? = nil
-    ) -> String? {
-        let approvals = self.approvals
-        if let existingPending, let hosted = Self.hostedApprovalKeys(existingPending) {
-            if let sticky = hosted.sticky, let record = approvals[sticky], record.status(for: callId) != nil {
-                return record.rejectionMessage(for: callId)
-            }
-            return approvals[hosted.exact]?.rejectionMessage(for: callId)
-        }
-        for candidate in candidateKeys(toolName: toolName, toolNamespace: toolNamespace, existingPending: existingPending, toolLookupKey: toolLookupKey) {
-            if let record = approvals[candidate], record.status(for: callId) != nil {
-                return record.rejectionMessage(for: callId)
+            if getHostedMCPApprovalRequestIdentity(existingPending.rawItem) != nil {
+                guard let hostedStatus = resolveHostedMCPApprovalDecision(existingPending).status else { return nil }
+                let effective = currentInvocation ?? existingPending
+                let binding = try approvedToolInvocationStatus(
+                    effective.rawItem,
+                    toolLookupKey: effective.toolLookupKey,
+                    toolName: effective.toolName,
+                    approvalItem: effective
+                )
+                return binding != nil ? hostedStatus : nil
             }
         }
-        return nil
-    }
 
-    func rebuildApprovals(_ json: JSONObject) {
-        var approvals: [String: ApprovalRecord] = [:]
-        for (key, value) in json {
-            if case .object(let record) = value {
-                approvals[key] = ApprovalRecord(json: record)
+        let candidates = Self.candidateKeys(toolName: toolName, toolNamespace: toolNamespace, existingPending: existingPending, toolLookupKey: toolLookupKey)
+        let selected = currentInvocation ?? existingPending
+        if let selected, toolInvocations[callId] != nil {
+            // Changing the approval owner must not bypass invocation reuse validation.
+            _ = try toolInvocationStatus(selected.rawItem, toolLookupKey: selected.toolLookupKey, toolName: selected.toolName)
+        }
+        let scope = selected.flatMap {
+            toolInvocationApprovalScope($0.rawItem, toolLookupKey: $0.toolLookupKey, toolName: $0.toolName)?.scope
+        }
+        var status: Bool?
+        var matched: KeyedApprovalRecord?
+        search: for candidate in candidates {
+            // Runtime name-only queries (such as native operation callbacks) must not borrow an
+            // agent-owned function decision from the inspection API.
+            let records = selected != nil
+                ? approvalRecordsForKey(candidate, selected, callId: callId, approvalScope: scope)
+                : [approvalRecordForKey(candidate, callId)].compactMap { $0 }
+            for keyed in records {
+                if let recordStatus = keyed.record.status(for: callId) {
+                    status = recordStatus
+                    matched = keyed
+                    break search
+                }
             }
         }
-        self.approvals = approvals
-    }
+        guard let status, let matched, let selected else { return status }
 
-    var serializedApprovals: JSONObject {
-        JSONObject(approvals.mapValues { .object($0.json) })
-    }
-
-    // MARK: - Forks
-
-    /// Creates a child context that shares approvals and usage, with tool input set.
-    public func forkWithToolInput(_ toolInput: (any Sendable)?) -> RunContextWrapper {
-        RunContextWrapper(context: context, usageBox: usageBox, approvalsBox: approvalsBox, turnInput: turnInput, toolInput: toolInput)
-    }
-
-    /// Creates a child context that shares approvals and usage without tool input.
-    public func forkWithoutToolInput() -> RunContextWrapper {
-        RunContextWrapper(context: context, usageBox: usageBox, approvalsBox: approvalsBox, turnInput: turnInput, toolInput: nil)
-    }
-
-    /// Copies SDK-owned state for an independently resumable checkpoint.
-    func copyForRunState() -> RunContextWrapper {
-        let copy = RunContextWrapper(
-            context: context,
-            usageBox: SharedBox(usage),
-            approvalsBox: SharedBox(approvals),
-            turnInput: turnInput,
-            toolInput: toolInput
+        if matched.record.isSticky {
+            if matched.record.stickyScope == nil, allowLegacyApprovalBindingReconstruction, let key = matched.key,
+               let scope = toolInvocationApprovalScope(selected.rawItem, toolLookupKey: selected.toolLookupKey, toolName: selected.toolName) {
+                approvals[key]?.stickyScope = scope.scope
+            }
+            let binding = try approvedToolInvocationStatus(
+                selected.rawItem,
+                toolLookupKey: selected.toolLookupKey,
+                toolName: selected.toolName,
+                approvalItem: selected
+            )
+            return binding != nil ? status : nil
+        }
+        if let currentInvocation,
+           toolInvocationIdentity(currentInvocation.rawItem, toolLookupKey: currentInvocation.toolLookupKey, toolName: currentInvocation.toolName) == nil {
+            _ = try approvedToolInvocationStatus(
+                currentInvocation.rawItem,
+                toolLookupKey: currentInvocation.toolLookupKey,
+                toolName: currentInvocation.toolName
+            )
+            return nil
+        }
+        let binding = try approvedToolInvocationStatus(
+            selected.rawItem,
+            toolLookupKey: selected.toolLookupKey,
+            toolName: selected.toolName,
+            approvalItem: selected
         )
-        return copy
+        if binding == nil {
+            if toolInvocationIdentity(selected.rawItem, toolLookupKey: selected.toolLookupKey, toolName: selected.toolName) != nil {
+                return nil
+            }
+            if let existingPending,
+               toolInvocationIdentity(existingPending.rawItem, toolLookupKey: existingPending.toolLookupKey, toolName: existingPending.toolName) == nil,
+               isMCPApprovalInvocation(existingPending.rawItem) {
+                return nil
+            }
+        }
+        return status
     }
-}
 
-/// Context passed to agent hooks (`on_start`, `on_end`).
-public final class AgentHookContext: RunContextWrapper, @unchecked Sendable {
-    /// Creates a hook context that shares usage and approvals with `wrapper`.
-    public init(from wrapper: RunContextWrapper) {
-        super.init(
-            context: wrapper.context,
-            usageBox: wrapper.usageBox,
-            approvalsBox: wrapper.approvalsBox,
-            turnInput: wrapper.turnInput,
-            toolInput: wrapper.toolInput
-        )
+    /// Records an approval or rejection decision.
+    mutating func applyApprovalDecision(
+        _ approvalItem: ToolApprovalItem,
+        always: Bool,
+        approve: Bool,
+        rejectionMessage: String? = nil
+    ) throws {
+        let hostedRequest = getHostedMCPApprovalRequestIdentity(approvalItem.rawItem)
+        let callId: String?
+        var hostedKey: ApprovalKey?
+        if let hostedRequest {
+            guard let requestId = hostedRequest.requestId else {
+                throw UserError("Hosted MCP approval decisions require a non-empty request id.")
+            }
+            callId = requestId
+            if let identity = hostedRequest.approvalIdentity {
+                hostedKey = .hostedMCP(serverLabel: identity.serverLabel, toolName: identity.toolName)
+            } else if always {
+                throw UserError("Persistent hosted MCP approval decisions require a non-empty server_label and tool name.")
+            } else {
+                hostedKey = .hostedMCPCall(requestId: requestId)
+            }
+        } else {
+            callId = RunContextWrapper.resolveCallId(approvalItem)
+        }
+
+        if let callIdentity = toolInvocationCallId(approvalItem.rawItem), callIdentity.callId == nil {
+            throw ModelBehaviorError("Approval decisions require a non-empty call ID for recognized tool invocations.")
+        }
+        let raw = approvalItem.rawItem
+        let rawCallId = raw["call_id"] != nil ? raw["call_id"] : raw["id"]
+        if rawCallId == .string(""), !always {
+            throw ModelBehaviorError("Per-call approval decisions require a non-empty call ID.")
+        }
+        let invocation = callId == nil
+            ? nil
+            : toolInvocationIdentity(raw, toolLookupKey: approvalItem.toolLookupKey, toolName: approvalItem.toolName)
+        let hasRawCallId = rawCallId != nil && rawCallId != .null
+        if (callId != nil && invocation == nil) || (callId == nil && hasRawCallId) {
+            throw ModelBehaviorError("Approval decisions require a canonical invocation identity.")
+        }
+        let scope = toolInvocationApprovalScope(raw, toolLookupKey: approvalItem.toolLookupKey, toolName: approvalItem.toolName)?.scope
+        if let invocation, let callId {
+            guard invocation.callId == callId else {
+                throw ModelBehaviorError("Approval decision call ID does not match its canonical invocation ID.")
+            }
+            let wasRestoredUnbound = restoredUnboundApprovalCallIds.remove(callId) != nil
+            do {
+                _ = try toolInvocationStatus(raw, toolLookupKey: approvalItem.toolLookupKey, toolName: approvalItem.toolName)
+            } catch {
+                if wasRestoredUnbound { restoredUnboundApprovalCallIds.insert(callId) }
+                throw error
+            }
+        }
+
+        var entries: [(key: ApprovalKey, sticky: Bool)] = []
+        if let hostedRequest, let hostedKey, let callId {
+            entries.append((getOrCreateApprovalEntry(hostedKey), always))
+            if let hostedToolName = Self.resolveHostedMCPToolName(approvalItem, hostedRequest) {
+                // Preserve exact name-based lookup without adding an authorization source.
+                entries.append((getOrCreateApprovalEntry(.hostedMCPQuery(toolName: hostedToolName, requestId: callId)), false))
+            }
+        } else {
+            let approvalKeys = RunContextWrapper.resolveApprovalKeys(approvalItem)
+            let decisionKeys = always || callId == nil
+                ? [RunContextWrapper.resolveApprovalKey(approvalItem)]
+                : (approvalKeys.isEmpty ? ["unknown_tool"] : approvalKeys)
+            for approvalKey in decisionKeys {
+                let key = Self.functionApprovalKey(approvalKey, approvalItem) ?? .name(approvalKey)
+                entries.append((getOrCreateApprovalEntry(key, approvalScope: scope), always))
+            }
+        }
+
+        for entry in entries {
+            approvals[entry.key] = Self.recordingDecision(
+                in: approvals[entry.key] ?? ApprovalRecord(),
+                sticky: entry.sticky || callId == nil,
+                callId: callId,
+                approve: approve,
+                approvalScope: scope,
+                rejectionMessage: rejectionMessage
+            )
+        }
+
+        if invocation != nil, let callId {
+            restoredUnboundApprovalCallIds.remove(callId)
+        }
+    }
+
+    /// Returns `record` with one approval or rejection applied.
+    private static func recordingDecision(
+        in record: ApprovalRecord,
+        sticky: Bool,
+        callId: String?,
+        approve: Bool,
+        approvalScope: String?,
+        rejectionMessage: String?
+    ) -> ApprovalRecord {
+        var record = record
+        if sticky {
+            record.stickyScope = approvalScope
+            record.approved = .all(approve)
+            record.rejected = approve ? .callIds([]) : .all(true)
+            if approve {
+                record.rejectionMessages.removeAll()
+                record.stickyRejectionMessage = nil
+            } else {
+                if let callId {
+                    record.rejectionMessages[callId] = rejectionMessage
+                }
+                record.stickyRejectionMessage = rejectionMessage
+            }
+            return record
+        }
+        guard let callId else { return record }
+        if approve {
+            if case .callIds(var ids) = record.rejected {
+                ids.removeAll { $0 == callId }
+                record.rejected = .callIds(ids)
+            }
+            if record.approved != .all(true) {
+                var ids = record.approved.callIds ?? []
+                if !ids.contains(callId) { ids.append(callId) }
+                record.approved = .callIds(ids)
+            }
+            record.rejectionMessages.removeValue(forKey: callId)
+        } else {
+            if case .callIds(var ids) = record.approved {
+                ids.removeAll { $0 == callId }
+                record.approved = .callIds(ids)
+            }
+            if record.rejected != .all(true) {
+                var ids = record.rejected.callIds ?? []
+                if !ids.contains(callId) { ids.append(callId) }
+                record.rejected = .callIds(ids)
+            }
+            record.rejectionMessages[callId] = rejectionMessage
+        }
+        return record
     }
 }

@@ -11,6 +11,12 @@ import Foundation
 enum RunStateStep: Sendable {
     case interruption(interruptions: [ToolApprovalItem], responseAccepted: Bool)
     case runAgain
+
+    /// The pending approvals of an interruption step.
+    var interruptionItems: [ToolApprovalItem] {
+        if case .interruption(let items, _) = self { return items }
+        return []
+    }
 }
 
 /// A snapshot of an agent run, including context, usage, and interruptions.

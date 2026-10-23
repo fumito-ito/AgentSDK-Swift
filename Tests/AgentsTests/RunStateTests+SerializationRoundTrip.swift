@@ -6,11 +6,11 @@ import AgentsTesting
 // Ported from tests/test_run_state.py (approval tests at the end of class TestRunState, and the
 // classes TestSerializationRoundTrip, TestRunContextApprovals, and TestRunStateEdgeCases).
 //
-// Swift: the canonical tool invocation ledger (`_tool_invocation.py`) is not ported yet, so the
-// approval tests that assert ledger binding (`test_schema_1_13_restores_pending_approval_binding_
-// from_interruption` through `test_serialized_apply_patch_approval_binds_plural_operations`, and
-// `test_context_override_discards_unbound_ids_from_previous_restore`) are pending in
-// porting/manifest.json.
+// The approval tests that assert invocation ledger binding
+// (`test_schema_1_13_restores_pending_approval_binding_from_interruption` through
+// `test_serialized_apply_patch_approval_binds_plural_operations`, and
+// `test_context_override_discards_unbound_ids_from_previous_restore`) are in
+// RunStateTests+InvocationLedger.swift.
 
 private func functionApproval(_ agent: Agent, name: String, callId: String, arguments: String = "") -> ToolApprovalItem {
     ToolApprovalItem(agent: agent, rawItem: ResponseFunctionToolCall(callId: callId, name: name, arguments: arguments, status: "completed").json)

@@ -7,46 +7,73 @@ let notFinalOutput = ToolsToFinalOutputResult(isFinalOutput: false, finalOutput:
 struct ToolRunHandoff: Sendable {
     var handoff: Handoff
     var toolCall: ResponseFunctionToolCall
+    /// The response item this run came from (upstream shares the raw item object), so
+    /// invocation de-duplication can drop exactly that item.
+    var callItem: RunItem?
 }
 
 struct ToolRunFunction: Sendable {
     var toolCall: ResponseFunctionToolCall
     var functionTool: FunctionTool
+    /// The response item this run came from (upstream shares the raw item object), so
+    /// invocation de-duplication can drop exactly that item.
+    var callItem: RunItem?
 }
 
 struct ToolRunFunctionNotFound: Sendable {
     var toolCall: ResponseFunctionToolCall
     var toolName: String
+    /// The response item this run came from (upstream shares the raw item object), so
+    /// invocation de-duplication can drop exactly that item.
+    var callItem: RunItem?
 }
 
 struct ToolRunComputerAction: Sendable {
     var toolCall: ResponseComputerToolCall
     var computerTool: ComputerTool
+    /// The response item this run came from (upstream shares the raw item object), so
+    /// invocation de-duplication can drop exactly that item.
+    var callItem: RunItem?
 }
 
 struct ToolRunCustom: Sendable {
     var toolCall: ResponseCustomToolCall
     var customTool: CustomTool
+    /// The response item this run came from (upstream shares the raw item object), so
+    /// invocation de-duplication can drop exactly that item.
+    var callItem: RunItem?
 }
 
 struct ToolRunMCPApprovalRequest: Sendable {
     var requestItem: McpApprovalRequest
     var mcpTool: HostedMCPTool
+    /// The response item this run came from (upstream shares the raw item object), so
+    /// invocation de-duplication can drop exactly that item.
+    var callItem: RunItem?
 }
 
 struct ToolRunLocalShellCall: Sendable {
     var toolCall: LocalShellCall
     var localShellTool: LocalShellTool
+    /// The response item this run came from (upstream shares the raw item object), so
+    /// invocation de-duplication can drop exactly that item.
+    var callItem: RunItem?
 }
 
 struct ToolRunShellCall: Sendable {
     var toolCall: JSONObject
     var shellTool: ShellTool
+    /// The response item this run came from (upstream shares the raw item object), so
+    /// invocation de-duplication can drop exactly that item.
+    var callItem: RunItem?
 }
 
 struct ToolRunApplyPatchCall: Sendable {
     var toolCall: JSONObject
     var applyPatchTool: ApplyPatchTool
+    /// The response item this run came from (upstream shares the raw item object), so
+    /// invocation de-duplication can drop exactly that item.
+    var callItem: RunItem?
 }
 
 /// The model response mapped to run items and local tool work.
