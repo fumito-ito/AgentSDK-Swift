@@ -18,6 +18,8 @@ struct ToolRunFunction: Sendable {
     /// The response item this run came from (upstream shares the raw item object), so
     /// invocation de-duplication can drop exactly that item.
     var callItem: RunItem?
+    /// The approval evaluated while selecting this run for resume, reused by execution.
+    var approvalEvaluation: FunctionToolApproval?
 }
 
 struct ToolRunFunctionNotFound: Sendable {

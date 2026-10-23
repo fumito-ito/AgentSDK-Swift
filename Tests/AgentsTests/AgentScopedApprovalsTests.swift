@@ -414,7 +414,7 @@ import AgentsTesting
         _ = try await RunState.fromString(configured, try state.toString())
     }
 
-    private struct ValueArgs: Decodable, Sendable { var value: String }
+    private struct ValueArgs: Codable, Sendable { var value: String }
 
     // Swift: upstream converts the context before the run; here the wrapper is reused directly.
     @Test func testConvertedContextPreservesApprovedInvocation() async throws {

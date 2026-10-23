@@ -81,7 +81,7 @@ extension ToolApprovalCallIdReuseTests {
         #expect(executed.value == ["safe"])
     }
 
-    struct IntValueArgs: Decodable, Sendable { var value: Int }
+    struct IntValueArgs: Codable, Sendable { var value: Int }
 
     @Test func testSerializedStickyIdenticalSiblingsExecuteOnce() async throws {
         let executed = SharedBox<[String]>([])

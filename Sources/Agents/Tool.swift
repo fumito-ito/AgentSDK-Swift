@@ -210,7 +210,10 @@ public final class FunctionTool: Tool, @unchecked Sendable {
     /// Return a `String`, a structured tool output (`ToolOutputText`, `ToolOutputImage`,
     /// `ToolOutputFileContent`), an array of them, or any value with a string description.
     public var onInvokeTool: @Sendable (ToolContext, String) async throws -> any Sendable {
-        didSet { failureHandlingInvoker = nil }
+        didSet {
+            failureHandlingInvoker = nil
+            invokerIdentity = FunctionToolInvokerIdentity()
+        }
     }
     /// Whether the JSON schema is in strict mode.
     public var strictJSONSchema: Bool
@@ -253,6 +256,9 @@ public final class FunctionTool: Tool, @unchecked Sendable {
     /// The SDK failure-handling invoker behind `onInvokeTool`, rebound to each copy so copies
     /// resolve failure policy against themselves. Cleared when `onInvokeTool` is replaced.
     var failureHandlingInvoker: FailureHandlingInvoker?
+    /// Changes whenever `onInvokeTool` is replaced, so an approval evaluated for one invoker is
+    /// not reused for another.
+    private(set) var invokerIdentity = FunctionToolInvokerIdentity()
 
     public init(
         name: String,
@@ -599,10 +605,9 @@ extension FunctionTool {
         _ body: @escaping @Sendable (ToolContext, Args) async throws -> any Sendable
     ) throws -> FunctionTool {
         let schema = try paramsJSONSchema ?? JSONSchemaGenerator.schema(for: Args.self)
-        let invoke: @Sendable (ToolContext, String) async throws -> any Sendable = { context, input in
-            let toolName = context.toolName.isEmpty ? name : context.toolName
+        let owner = PreparedArgumentsOwner()
+        @Sendable func prepareArguments(_ input: String, toolName: String, inspectApproval: Bool = false) throws -> PreparedFunctionArguments {
             let json = try parseFunctionToolJSONInput(toolName: toolName, inputJSON: input)
-            logFunctionToolInvocation(toolName: toolName, inputJSON: input)
             let arguments: Args
             do {
                 arguments = try JSONValue.object(json).decode(as: Args.self)
@@ -613,6 +618,28 @@ extension FunctionTool {
                 }
                 throw ModelBehaviorError("\(baseMessage): \(error)")
             }
+            return PreparedFunctionArguments(
+                owner: owner,
+                arguments: input,
+                value: arguments,
+                unchanged: inspectApproval && argumentsUnchanged(arguments, raw: json)
+            )
+        }
+        let invoke: @Sendable (ToolContext, String) async throws -> any Sendable = { context, input in
+            let toolName = context.toolName.isEmpty ? name : context.toolName
+            let prepared = context.functionToolArguments
+            context.functionToolArguments = nil
+            let arguments: Args
+            if let prepared {
+                guard prepared.owner === owner, prepared.arguments == input, let value = prepared.value as? Args else {
+                    throw UserError("Prepared function arguments do not match this invocation.")
+                }
+                arguments = value
+            } else {
+                // swiftlint:disable:next force_cast
+                arguments = try prepareArguments(input, toolName: toolName).value as! Args
+            }
+            logFunctionToolInvocation(toolName: toolName, inputJSON: input)
             // Release the next queued tool only once this tool's body is about to run.
             ToolDispatchSignal.current?.signal()
             let output = try await body(context, arguments)
@@ -623,11 +650,18 @@ extension FunctionTool {
             }
             return output
         }
+        // A failed inspection cannot authorize the invocation's error handler: the call is
+        // revalidated through the ordinary invocation path after approval.
+        let prepareForApproval: @Sendable (String, String) -> PreparedFunctionArguments = { input, toolName in
+            (try? prepareArguments(input, toolName: toolName, inspectApproval: true))
+                ?? PreparedFunctionArguments(owner: owner, arguments: input)
+        }
         let tool = try makeFailureHandlingTool(
             name: name,
             description: description,
             paramsJSONSchema: schema,
             invoke: invoke,
+            prepareArguments: prepareForApproval,
             failureErrorFunction: failureErrorFunction,
             strictJSONSchema: strictJSONSchema,
             isEnabled: isEnabled,
@@ -682,6 +716,7 @@ extension FunctionTool {
         description: String,
         paramsJSONSchema: JSONObject,
         invoke: @escaping @Sendable (ToolContext, String) async throws -> any Sendable,
+        prepareArguments: (@Sendable (String, String) -> PreparedFunctionArguments)? = nil,
         failureErrorFunction: FailureErrorFunction = .default,
         strictJSONSchema: Bool = true,
         isEnabled: ToolEnablement = .always,
@@ -699,7 +734,7 @@ extension FunctionTool {
         mcpTitle: String? = nil,
         onHandledError: (@Sendable (FunctionTool, any Error, String, ToolContext) -> Void)? = nil
     ) throws -> FunctionTool {
-        let invoker = FailureHandlingInvoker(invoke: invoke, onHandledError: onHandledError)
+        let invoker = FailureHandlingInvoker(invoke: invoke, onHandledError: onHandledError, prepare: prepareArguments)
         let tool = try FunctionTool(
             name: name,
             description: description,
@@ -731,6 +766,13 @@ extension FunctionTool {
 struct FailureHandlingInvoker: Sendable {
     let invoke: @Sendable (ToolContext, String) async throws -> any Sendable
     let onHandledError: (@Sendable (FunctionTool, any Error, String, ToolContext) -> Void)?
+    var prepare: (@Sendable (String, String) -> PreparedFunctionArguments)?
+
+    /// Decodes arguments for approval inspection without running the tool, when the SDK built
+    /// the invoker (upstream `prepare_arguments`).
+    func prepareArguments(_ input: String, toolName: String) -> PreparedFunctionArguments? {
+        prepare?(input, toolName)
+    }
 
     /// Returns an invoker that resolves failure policy against `tool`.
     func bound(to tool: FunctionTool) -> @Sendable (ToolContext, String) async throws -> any Sendable {
