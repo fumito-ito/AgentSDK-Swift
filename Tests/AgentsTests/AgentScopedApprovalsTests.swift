@@ -514,7 +514,8 @@ import AgentsTesting
         let context = RunContextWrapper(context: ["tenant": "synthetic"] as JSONObject)
         var references: [() -> AnyObject?] = []
         for index in 0..<10 {
-            try autoreleasepool {
+            // Swift: a `do` scope releases the agents at its end; `autoreleasepool` is Darwin-only.
+            do {
                 let child = Agent(name: "child")
                 let agent = Agent(name: "owner", handoffs: [.agent(child)])
                 references.append { [weak agent] in agent }
