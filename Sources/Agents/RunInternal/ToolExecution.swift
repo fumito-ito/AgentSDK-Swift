@@ -3,28 +3,12 @@ import Foundation
 // Port of the function tool, approval, and hosted MCP parts of
 // src/agents/run_internal/tool_execution.py and tool_planning.py.
 //
-// Swift: the invocation-identity ledger that rejects call-ID reuse across resumes, nested
-// agent-tool interruption routing, and the cooperative cancellation bookkeeping for sibling tool
-// tasks are not ported; see porting/manifest.json.
+// Swift: nested agent-tool interruption routing and the cooperative cancellation bookkeeping for
+// sibling tool tasks are not ported; see porting/manifest.json.
 
-/// Decides whether a function tool call requires approval, parsing the arguments for callable
-/// policies. Invalid arguments require manual approval.
-func functionNeedsApproval(_ tool: FunctionTool, _ contextWrapper: RunContextWrapper, _ toolCall: ResponseFunctionToolCall) async throws -> Bool {
-    switch tool.needsApproval {
-    case .required(let value):
-        return value
-    case .dynamic(let policy):
-        guard case .object(let arguments)? = try? JSONValue.parse(toolCall.arguments.isEmpty ? "{}" : toolCall.arguments) else {
-            return true
-        }
-        do {
-            return try await policy(contextWrapper, arguments, toolCall.callId)
-        } catch let error as UserError {
-            throw error
-        } catch {
-            return true
-        }
-    }
+/// Prepares and evaluates a single function invocation without executing it.
+func functionNeedsApproval(_ tool: FunctionTool, _ contextWrapper: RunContextWrapper, _ toolCall: ResponseFunctionToolCall) async throws -> FunctionToolApproval {
+    try await evaluateFunctionToolApproval(tool, context: contextWrapper, arguments: toolCall.arguments, callId: toolCall.callId)
 }
 
 /// Runs a function tool's input guardrails and returns a rejection message if any.
@@ -162,8 +146,12 @@ struct FunctionToolBatchExecutor {
                 span.data(as: FunctionSpanData.self)?.input = toolCall.arguments
             }
             let result: FunctionToolResult
+            defer { toolContext.functionToolArguments = nil }
             do {
-                if let approvalResult = try await maybeExecuteToolApproval(tool: tool, toolCall: toolCall, rawToolCall: rawToolCall, span: span, toolContext: toolContext) {
+                if let approvalResult = try await maybeExecuteToolApproval(
+                    tool: tool, toolCall: toolCall, rawToolCall: rawToolCall, span: span, toolContext: toolContext,
+                    approvalEvaluation: run.approvalEvaluation
+                ) {
                     result = approvalResult
                 } else {
                     result = try await executeSingleToolBody(tool: tool, toolCall: toolCall, toolContext: toolContext)
@@ -188,7 +176,8 @@ struct FunctionToolBatchExecutor {
         toolCall: ResponseFunctionToolCall,
         rawToolCall: ResponseFunctionToolCall,
         span: any Span,
-        toolContext: ToolContext
+        toolContext: ToolContext,
+        approvalEvaluation: FunctionToolApproval?
     ) async throws -> FunctionToolResult? {
         var namespace = getToolCallNamespace(rawToolCall.json)
         if namespace == nil, isDeferredTopLevelFunctionTool(tool) { namespace = tool.name }
@@ -207,13 +196,24 @@ struct FunctionToolBatchExecutor {
             toolName: tool.name, callId: toolCall.callId, toolNamespace: namespace,
             toolLookupKey: lookupKey, currentInvocation: approvalItem
         )
+        if let approvalEvaluation {
+            try approvalEvaluation.checkInvocation(tool, arguments: toolCall.arguments)
+            if status != false { toolContext.functionToolArguments = approvalEvaluation.prepared }
+        }
         if status == nil {
-            let needsApproval = try await functionNeedsApproval(tool, contextWrapper, toolCall)
+            let evaluation: FunctionToolApproval
+            if let approvalEvaluation {
+                evaluation = approvalEvaluation
+            } else {
+                evaluation = try await functionNeedsApproval(tool, contextWrapper, toolCall)
+            }
+            try evaluation.checkInvocation(tool, arguments: toolCall.arguments)
+            toolContext.functionToolArguments = evaluation.prepared
             status = try contextWrapper.getApprovalStatus(
                 toolName: tool.name, callId: toolCall.callId, toolNamespace: namespace,
                 toolLookupKey: lookupKey, currentInvocation: approvalItem
             )
-            if status == nil, !needsApproval { return nil }
+            if status == nil, evaluation.outcome == .invoke { return nil }
         }
         if status == nil {
             if config.toolExecution?.preApprovalToolInputGuardrails == true {

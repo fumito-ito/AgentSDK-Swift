@@ -820,8 +820,13 @@ private func selectFunctionToolRunsForResume(
             existingPending: existing, toolLookupKey: current.toolLookupKey, currentInvocation: current
         )
         var requiresApproval = true
+        var run = run
+        run.approvalEvaluation = nil
         if status == nil {
-            requiresApproval = existing != nil ? true : try await functionNeedsApproval(run.functionTool, contextWrapper, run.toolCall)
+            let evaluation = try await functionRequiresApproval(run, pending: existing != nil, contextWrapper: contextWrapper)
+            try evaluation.checkInvocation(run.functionTool, arguments: run.toolCall.arguments)
+            run.approvalEvaluation = evaluation
+            requiresApproval = evaluation.outcome != .invoke
             status = try contextWrapper.getApprovalStatus(
                 toolName: run.functionTool.name, callId: run.toolCall.callId, toolNamespace: getToolCallNamespace(run.toolCall.json),
                 existingPending: existing, toolLookupKey: current.toolLookupKey, currentInvocation: current
@@ -854,6 +859,20 @@ private func selectFunctionToolRunsForResume(
         }
     }
     return (approvedFunctions, rejectionItems, pendingInterruptions)
+}
+
+/// Evaluates a resumed function call's approval. A call that already has a pending approval, or
+/// whose policy fails, requires approval (upstream `_function_requires_approval`).
+private func functionRequiresApproval(_ run: ToolRunFunction, pending: Bool, contextWrapper: RunContextWrapper) async throws -> FunctionToolApproval {
+    let required = FunctionToolApproval(.requireApproval, tool: run.functionTool, arguments: run.toolCall.arguments)
+    if pending { return required }
+    do {
+        return try await functionNeedsApproval(run.functionTool, contextWrapper, run.toolCall)
+    } catch let error as UserError {
+        throw error
+    } catch {
+        return required
+    }
 }
 
 /// Keeps a resumed run's `RunState` current while tools finish, so a later failure (a hook, a

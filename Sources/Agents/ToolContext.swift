@@ -21,6 +21,8 @@ public final class ToolContext: RunContextWrapper, @unchecked Sendable {
     var customData: JSONObject?
     /// Whether the default failure formatter produced the latest invocation result.
     var defaultFailureHandled = false
+    /// Arguments prepared during approval evaluation, consumed by the next invocation.
+    var functionToolArguments: PreparedFunctionArguments?
 
     public init(
         context: any Sendable,

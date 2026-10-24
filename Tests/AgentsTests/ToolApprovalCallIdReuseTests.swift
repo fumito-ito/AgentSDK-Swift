@@ -156,7 +156,7 @@ import AgentsTesting
         }
     }
 
-    struct ValueArgs: Decodable, Sendable { var value: String }
+    struct ValueArgs: Codable, Sendable { var value: String }
 
     func buildScenario(secondCallId: String, secondValue: String) throws -> (Agent, RunConfig, SharedBox<[String]>) {
         let executed = SharedBox<[String]>([])

@@ -27,9 +27,11 @@
       "notes": "Python environment debug flags; see Logger."
     },
     "src/agents/_function_tool_arguments.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Sources/Agents/FunctionToolArguments.swift"
+      ],
+      "notes": "Codable arguments are inspected by re-encoding instead of pydantic schema inspection (D18); can_prepare_without_user_code is not ported."
     },
     "src/agents/_httpx_compat.py": {
       "status": "skipped",
@@ -859,9 +861,11 @@
       "notes": ""
     },
     "src/agents/run_internal/approvals.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/RunInternal/RunInternalApprovals.swift"
+      ],
+      "notes": "Renamed (D10)."
     },
     "src/agents/run_internal/blocked_output.py": {
       "status": "pending",
@@ -965,7 +969,7 @@
       "swift": [
         "Sources/Agents/RunInternal/ToolExecution.swift"
       ],
-      "notes": "Function tools, hosted MCP callbacks, manual MCP reconciliation, and process_hosted_mcp_approvals use the invocation ledger. Pending: FunctionToolApproval argument preparation (check_invocation), nested agent-tool interruption routing, and sibling cancellation bookkeeping."
+      "notes": "Function tools, hosted MCP callbacks, manual MCP reconciliation, and process_hosted_mcp_approvals use the invocation ledger. Function approvals reuse the prepared arguments (D18). Pending: nested agent-tool interruption routing and sibling cancellation bookkeeping."
     },
     "src/agents/run_internal/tool_planning.py": {
       "status": "partial",
@@ -1503,7 +1507,7 @@
         "Sources/Agents/Tool.swift",
         "Sources/Agents/FunctionSchema.swift"
       ],
-      "notes": "Decorator/signature introspection replaced by Decodable schemas (D6)."
+      "notes": "Decorator/signature introspection replaced by Decodable schemas (D6). FunctionTool.create prepares arguments for approval inspection (D18)."
     },
     "src/agents/tool_context.py": {
       "status": "ported",
@@ -1629,9 +1633,11 @@
       "notes": "Re-exports; map to the module's public surface."
     },
     "src/agents/util/_approvals.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/Util/Approvals.swift"
+      ],
+      "notes": "evaluate_needs_approval_setting is not ported: ToolApprovalRequirement is already a Bool or a policy."
     },
     "src/agents/util/_asyncio_tasks.py": {
       "status": "pending",
@@ -3449,9 +3455,11 @@
       "notes": "Skipped: to_thread/event-loop, pydantic Field/kwargs, monkeypatch/deepcopy/dataclasses.replace private fields, FunctionTool subclasses (final class), runtime type checks for timeout config. JSON Schema validator assertions replaced by schema-shape assertions."
     },
     "tests/test_function_tool_approval_arguments.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/FunctionToolApprovalArgumentsTests.swift"
+      ],
+      "notes": "Pydantic validator, plugin, pattern, and **kwargs tests are not ported (D18). Realtime modes and test_realtime_* wait for AgentsRealtime."
     },
     "tests/test_function_tool_decorator.py": {
       "status": "pending",
@@ -3746,9 +3754,11 @@
       "notes": ""
     },
     "tests/test_run_internal_approvals.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/RunInternalApprovalsTests.swift"
+      ],
+      "notes": "The arbitrary-object namespace source is not ported; raw tool calls are JSON."
     },
     "tests/test_run_internal_error_handlers.py": {
       "status": "pending",
