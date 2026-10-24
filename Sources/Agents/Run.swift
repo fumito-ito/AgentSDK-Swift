@@ -237,6 +237,20 @@ open class AgentRunner: @unchecked Sendable {
         let currentAgent: Agent
         if case .state(let state) = input { currentAgent = state.currentAgent ?? startingAgent } else { currentAgent = startingAgent }
         let streamed = RunResultStreaming(input: resultInput, currentAgent: currentAgent, contextWrapper: wrapper, maxTurns: resolvedMaxTurns)
+        if case .state(let state) = input {
+            // A resumed stream starts from the state's progress, before the run task updates it.
+            streamed.update {
+                $0.newItems = state.sessionItems
+                $0.rawResponses = state.modelResponses
+                $0.currentTurn = state.currentTurn
+                $0.inputGuardrailResults = state.inputGuardrailResults
+                $0.outputGuardrailResults = state.outputGuardrailResults
+                $0.toolInputGuardrailResults = state.toolInputGuardrailResults
+                $0.toolOutputGuardrailResults = state.toolOutputGuardrailResults
+                $0.stateFields.currentTurn = state.currentTurn
+                $0.stateFields.currentTurnPersistedItemCount = state.currentTurnPersistedItemCount
+            }
+        }
         let task = Task<Void, any Error> {
             do {
                 let driver = try RunDriver(
