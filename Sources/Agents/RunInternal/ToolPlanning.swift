@@ -1,7 +1,8 @@
 import Foundation
 
-// Port of the invocation validation and de-duplication parts of
-// src/agents/run_internal/tool_planning.py.
+// Port of the invocation validation, de-duplication, and resume selection parts of
+// src/agents/run_internal/tool_planning.py. The plan types and MCP approval helpers live in
+// ToolExecution.swift.
 //
 // Swift: upstream identifies the response item behind each tool run by sharing the raw item object
 // (`id(raw_item)`). Swift raw items are values, so each tool run keeps a reference to its call item
@@ -335,4 +336,156 @@ private struct ResponseInvocationDeduplicator {
         }
         return true
     }
+}
+
+// MARK: - Resume selection
+
+/// A tool run whose raw call can be gated by approval (upstream reads `run.tool_call` and, for
+/// function runs, `run.function_tool`).
+protocol ApprovalGatedToolRun: Sendable {
+    var approvalRawItem: JSONObject { get }
+    var approvalFunctionTool: FunctionTool? { get }
+}
+
+extension ApprovalGatedToolRun {
+    var approvalFunctionTool: FunctionTool? { nil }
+}
+
+extension ToolRunFunction: ApprovalGatedToolRun {
+    var approvalRawItem: JSONObject { toolCall.json }
+    var approvalFunctionTool: FunctionTool? { functionTool }
+}
+
+extension ToolRunShellCall: ApprovalGatedToolRun {
+    var approvalRawItem: JSONObject { toolCall }
+}
+
+extension ToolRunApplyPatchCall: ApprovalGatedToolRun {
+    var approvalRawItem: JSONObject { toolCall }
+}
+
+extension ToolRunCustom: ApprovalGatedToolRun {
+    var approvalRawItem: JSONObject { toolCall.json }
+}
+
+/// Returns approved runs and rejection items, adding pending approvals via callback.
+///
+/// A resolved decision short-circuits `needsApprovalChecker`, and the status is read again after
+/// the checker returns so a decision recorded while it waited still applies.
+func collectRunsByApproval<Run: ApprovalGatedToolRun>(
+    _ runs: [Run],
+    callIdExtractor: (Run) throws -> String,
+    toolNameResolver: (Run) -> String,
+    rejectionBuilder: (Run, String) async throws -> RunItem,
+    contextWrapper: RunContextWrapper,
+    approvalItemsByCallId: [String: ToolApprovalItem],
+    agent: Agent,
+    pendingInterruptionAdder: (ToolApprovalItem) -> Void,
+    needsApprovalChecker: ((Run) async throws -> Bool)? = nil,
+    outputExistsChecker: ((String) -> Bool)? = nil
+) async throws -> (approved: [Run], rejections: [RunItem]) {
+    var approvedRuns: [Run] = []
+    var rejectionItems: [RunItem] = []
+    for run in runs {
+        let callId = try callIdExtractor(run)
+        if outputExistsChecker?(callId) == true { continue }
+        let toolName = toolNameResolver(run)
+        let existingPending = approvalItemsByCallId[callId]
+        let functionTool = run.approvalFunctionTool
+        let currentItem = ToolApprovalItem(
+            agent: agent, rawItem: run.approvalRawItem, toolName: toolName,
+            toolNamespace: getToolCallNamespace(run.approvalRawItem),
+            toolOrigin: functionTool.flatMap(getFunctionToolOrigin),
+            toolLookupKey: functionTool.flatMap(getFunctionToolLookupKeyForTool)
+        )
+        func approvalStatus() throws -> Bool? {
+            try contextWrapper.getApprovalStatus(
+                toolName: toolName, callId: callId, existingPending: existingPending, currentInvocation: currentItem
+            )
+        }
+        var status = try approvalStatus()
+
+        var needsApproval = true
+        if status == nil, let needsApprovalChecker {
+            do {
+                needsApproval = try await needsApprovalChecker(run)
+            } catch let error as UserError {
+                throw error
+            } catch {
+                needsApproval = true
+            }
+            status = try approvalStatus()
+        }
+
+        switch status {
+        case false?:
+            rejectionItems.append(try await rejectionBuilder(run, callId))
+        case true?:
+            approvedRuns.append(run)
+        case nil:
+            if needsApproval {
+                pendingInterruptionAdder(existingPending ?? currentItem)
+            } else {
+                approvedRuns.append(run)
+            }
+        }
+    }
+    return (approvedRuns, rejectionItems)
+}
+
+/// Filters function tool runs during resume, honoring approvals and outputs.
+///
+/// A resolved decision short-circuits `needsApprovalChecker`. A selected run keeps the evaluation
+/// it was approved with, so execution reuses the prepared arguments.
+func selectFunctionToolRunsForResume(
+    _ runs: [ToolRunFunction],
+    approvalItemsByCallId: [String: ToolApprovalItem],
+    contextWrapper: RunContextWrapper,
+    needsApprovalChecker: (ToolRunFunction) async throws -> FunctionToolApproval,
+    outputExistsChecker: (ToolRunFunction) throws -> Bool,
+    recordRejection: (String?, ResponseFunctionToolCall, FunctionTool) async throws -> Void,
+    pendingInterruptionAdder: (ToolApprovalItem) -> Void,
+    pendingItemBuilder: (ToolRunFunction) -> ToolApprovalItem
+) async throws -> [ToolRunFunction] {
+    var selected: [ToolRunFunction] = []
+    for var run in runs {
+        let callId = run.toolCall.callId
+        if try outputExistsChecker(run) { continue }
+
+        let currentItem = pendingItemBuilder(run)
+        let existingPending = approvalItemsByCallId[callId]
+        func approvalStatus() throws -> Bool? {
+            try contextWrapper.getApprovalStatus(
+                toolName: run.functionTool.name, callId: callId, toolNamespace: getToolCallNamespace(run.toolCall.json),
+                existingPending: existingPending, toolLookupKey: currentItem.toolLookupKey, currentInvocation: currentItem
+            )
+        }
+        var status = try approvalStatus()
+
+        var requiresApproval = true
+        run.approvalEvaluation = nil
+        if status == nil {
+            let evaluation = try await needsApprovalChecker(run)
+            try evaluation.checkInvocation(run.functionTool, arguments: run.toolCall.arguments)
+            run.approvalEvaluation = evaluation
+            requiresApproval = evaluation.outcome != .invoke
+            status = try approvalStatus()
+        }
+
+        switch status {
+        case false?:
+            run.approvalEvaluation = nil
+            try await recordRejection(callId, run.toolCall, run.functionTool)
+        case true?:
+            selected.append(run)
+        case nil:
+            if !requiresApproval {
+                selected.append(run)
+            } else {
+                run.approvalEvaluation = nil
+                pendingInterruptionAdder(existingPending ?? currentItem)
+            }
+        }
+    }
+    return selected
 }

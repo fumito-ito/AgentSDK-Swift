@@ -540,8 +540,7 @@ extension RunState {
         result["interruptions"] = .array(processed.interruptions.map {
             .object(serializeToolApprovalInterruption($0, includeToolName: true, identityKeys))
         })
-        // Swift: local MCP recipient bindings are not ported yet.
-        result["mcp_tool_bindings"] = [:]
+        result["mcp_tool_bindings"] = .object(JSONObject(processed.mcpToolBindings.mapValues(\.json)))
         return result
     }
 }

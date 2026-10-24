@@ -935,7 +935,7 @@
       "swift": [
         "Sources/Agents/RunInternal/RunSteps.swift"
       ],
-      "notes": ""
+      "notes": "ProcessedResponse.mcp_tool_bindings uses the MCPToolBinding struct in place of upstream's tuple."
     },
     "src/agents/run_internal/session_persistence.py": {
       "status": "partial",
@@ -977,7 +977,7 @@
         "Sources/Agents/RunInternal/ToolPlanning.swift",
         "Sources/Agents/RunInternal/ToolExecution.swift"
       ],
-      "notes": "Invocation registration, response de-duplication, MCP preflight, and plan building are ported. Swift tool runs keep a reference to their call item in place of upstream's shared raw item identity. Native tool approvals are evaluated inside each action instead of _collect_runs_by_approval."
+      "notes": "Invocation registration, response de-duplication, MCP preflight, plan building, and resume selection (_collect_runs_by_approval, _select_function_tool_runs_for_resume) are ported. Swift tool runs keep a reference to their call item in place of upstream's shared raw item identity."
     },
     "src/agents/run_internal/tool_use_tracker.py": {
       "status": "ported",
@@ -996,9 +996,10 @@
     "src/agents/run_internal/turn_resolution.py": {
       "status": "partial",
       "swift": [
-        "Sources/Agents/RunInternal/TurnResolution.swift"
+        "Sources/Agents/RunInternal/TurnResolution.swift",
+        "Sources/Agents/RunInternal/InterruptedTurnResolution.swift"
       ],
-      "notes": "Fresh and resumed turns validate invocations against the ledger, and resumed tool outputs are checkpointed into the RunState as they finish. Pending: resume-time reconciliation of interrupted calls against the current tool inventory (only unqueued custom tool approvals are resolved), response_accepted resume, PTC parent validation, and blocked-output replacement."
+      "notes": "Fresh and resumed turns validate invocations against the ledger. Resume reconciles interrupted calls and pending approvals against the current tool inventory (including local MCP recipient bindings) and checkpoints tool outputs into the RunState as they finish; resolve_interrupted_turn lives in InterruptedTurnResolution.swift (D19). Pending: response_accepted resume, nested Agent.as_tool() run state (agent_tool_state.py), PTC parent validation, and blocked-output replacement."
     },
     "src/agents/run_state.py": {
       "status": "partial",
@@ -1008,7 +1009,7 @@
         "Sources/Agents/RunStateDeserialization.swift",
         "Sources/Agents/RunStateInvocationValidation.swift"
       ],
-      "notes": "JSON serialization (schema 1.18) ported (D13), including the tool invocation ledger, agent-owned function approvals, hosted MCP query records, and completed-invocation validation with legacy reconstruction. Pending: nested agent-tool run states, nested history ownership retention (validated, then dropped), pending Session writes, terminal-unrecoverable marker, programmatic tool calling resume checks, current-response item identity restore, error redaction, and sandbox payloads (out of scope)."
+      "notes": "JSON serialization (schema 1.18) ported (D13), including the tool invocation ledger, agent-owned function approvals, hosted MCP query records, local MCP recipient bindings, and completed-invocation validation with legacy reconstruction. Pending: nested agent-tool run states, nested history ownership retention (validated, then dropped), pending Session writes, terminal-unrecoverable marker, programmatic tool calling resume checks, current-response item identity restore, error redaction, and sandbox payloads (out of scope)."
     },
     "src/agents/sandbox/__init__.py": {
       "status": "out_of_scope",
@@ -3500,9 +3501,13 @@
       "notes": "Type-enforced validation and pydantic lenient-mode cases skipped."
     },
     "tests/test_hitl_error_scenarios.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/HITLErrorScenariosTests.swift",
+        "Tests/AgentsTests/HITLErrorScenariosTests+Resume.swift",
+        "Tests/AgentsTests/HITLErrorScenariosTests+Approvals.swift"
+      ],
+      "notes": "Skipped: test_function_needs_approval_invalid_type_raises and test_resume_invalid_needs_approval_raises (an invalid needs_approval cannot be constructed in Swift). Pending: the nested Agent.as_tool() scenarios (agent_tool_state.py) and test_resume_checkpoints_computer_output_before_custom_data_failure (ComputerTool.custom_data_extractor). Execution-clone tests resume with the public agent because only sandbox agents create clones (D2)."
     },
     "tests/test_hitl_session_scenario.py": {
       "status": "pending",
@@ -3936,7 +3941,7 @@
         "Tests/AgentsTests/ToolApprovalCallIdReuseTests+Snapshots.swift",
         "Tests/AgentsTests/ToolApprovalCallIdReuseTests+HostedMCP.swift"
       ],
-      "notes": "Skipped: pydantic model_dump cases. Pending: nested agent-tool cases (agent_tool_state.py) and custom tool resume against the current tool inventory. test_legacy_changed_pending_call_fails_before_approval_callback checks the approval lookup directly because _collect_runs_by_approval is not a Swift helper."
+      "notes": "Skipped: pydantic model_dump cases. Pending: nested agent-tool cases (agent_tool_state.py)."
     },
     "tests/test_tool_choice_reset.py": {
       "status": "ported",
@@ -4141,7 +4146,7 @@
       "swift": [
         "Tests/AgentsTests/Utils/HITL.swift"
       ],
-      "notes": "Builders and resume helpers used by the ported tests; the remaining scenario helpers are ported with the tests that need them."
+      "notes": "Builders, scenario containers, and run/resume helpers used by the ported tests. Pending: resume_streamed_after_first_approval, reject_tool_call, and make_on_approval_callback, ported with the tests that need them."
     },
     "tests/utils/simple_session.py": {
       "status": "ported",
