@@ -466,6 +466,12 @@ public struct RunEventStream: AsyncSequence, Sendable {
             do {
                 guard let event = try await base.next() else {
                     finish()
+                    // A consumer cancelled while waiting stops the run (upstream cancels the
+                    // streamed run and re-raises `CancelledError`).
+                    if Task.isCancelled, !result.isComplete {
+                        result.cancel()
+                        throw CancellationError()
+                    }
                     return nil
                 }
                 pendingAcknowledgement = true
