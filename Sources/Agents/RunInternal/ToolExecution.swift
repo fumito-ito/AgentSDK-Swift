@@ -152,9 +152,12 @@ struct FunctionToolBatchExecutor {
                     tool: tool, toolCall: toolCall, rawToolCall: rawToolCall, span: span, toolContext: toolContext,
                     approvalEvaluation: run.approvalEvaluation
                 ) {
-                    result = approvalResult
+                    result = attachConsumedNestedResult(approvalResult, rawToolCall: rawToolCall)
                 } else {
-                    result = try await executeSingleToolBody(tool: tool, toolCall: toolCall, toolContext: toolContext)
+                    result = attachResolvedNestedResult(
+                        try await executeSingleToolBody(tool: tool, toolCall: toolCall, rawToolCall: rawToolCall, toolContext: toolContext),
+                        rawToolCall: rawToolCall
+                    )
                 }
             } catch {
                 attachErrorToCurrentSpan(SpanError(message: "Error running tool", data: [
@@ -228,7 +231,7 @@ struct FunctionToolBatchExecutor {
                         output: rejected,
                         runItem: try functionRejectionItem(
                             agent: agent, toolCall: toolCall, rejectionMessage: rejected,
-                            outputJSONSchema: tool.outputJSONSchema, toolOrigin: getFunctionToolOrigin(tool)
+                            outputJSONSchema: tool.outputJSONSchema, toolStateScope: toolStateScope, toolOrigin: getFunctionToolOrigin(tool)
                         )
                     )
                 }
@@ -255,32 +258,82 @@ struct FunctionToolBatchExecutor {
             output: message,
             runItem: try functionRejectionItem(
                 agent: agent, toolCall: toolCall, rejectionMessage: message,
-                outputJSONSchema: tool.outputJSONSchema, toolOrigin: getFunctionToolOrigin(tool)
+                outputJSONSchema: tool.outputJSONSchema, toolStateScope: toolStateScope, toolOrigin: getFunctionToolOrigin(tool)
             )
         )
     }
 
-    private func executeSingleToolBody(tool: FunctionTool, toolCall: ResponseFunctionToolCall, toolContext: ToolContext) async throws -> FunctionToolResult {
-        try contextWrapper.markToolInvocationExecuted(toolCall.json, toolLookupKey: getFunctionToolLookupKeyForTool(tool))
-        if let rejected = try await executeToolInputGuardrails(tool: tool, toolContext: toolContext, agent: agent, results: inputGuardrailResults) {
-            let provider = functionToolErrorOutput(toolCall: toolCall.json, output: rejected, outputJSONSchema: tool.outputJSONSchema)
-            return FunctionToolResult(
-                tool: tool,
-                output: rejected,
-                runItem: ToolCallOutputItem(
-                    agent: agent,
-                    rawItem: try ItemHelpers.toolCallOutputItem(toolCall, output: provider),
+    // MARK: Nested agent-tool results
+
+    private var toolStateScope: AgentToolStateScope? {
+        getAgentToolStateScope(contextWrapper)
+    }
+
+    /// Attaches the stored nested run of an approval-path result, consuming it (upstream
+    /// `_consume_nested_tool_run_result`).
+    private func attachConsumedNestedResult(_ result: FunctionToolResult, rawToolCall: ResponseFunctionToolCall) -> FunctionToolResult {
+        guard let nested = consumeAgentToolRunResult(rawToolCall.json, scope: toolStateScope) else { return result }
+        var result = result
+        result.agentRunResult = nested.agentRunResultValue
+        let interruptions = nested.interruptions
+        if !interruptions.isEmpty { result.interruptions = interruptions }
+        return result
+    }
+
+    /// Attaches the stored nested run of an executed call, keeping it while it still has
+    /// unresolved interruptions (upstream `_resolve_nested_tool_run_result`).
+    private func attachResolvedNestedResult(_ result: FunctionToolResult, rawToolCall: ResponseFunctionToolCall) -> FunctionToolResult {
+        var nested = peekAgentToolRunResult(rawToolCall.json, scope: toolStateScope)
+        var interruptions = nested?.interruptions ?? []
+        if nested == nil || interruptions.isEmpty {
+            nested = consumeAgentToolRunResult(rawToolCall.json, scope: toolStateScope)
+            interruptions = nested?.interruptions ?? []
+        }
+        var result = result
+        result.agentRunResult = nested?.agentRunResultValue
+        result.interruptions = interruptions
+        // Skip the tool output until nested interruptions are resolved.
+        if !interruptions.isEmpty { result.runItem = nil }
+        return result
+    }
+
+    private func nestedInterruptions(_ rawToolCall: ResponseFunctionToolCall) -> [ToolApprovalItem] {
+        peekAgentToolRunResult(rawToolCall.json, scope: toolStateScope)?.interruptions ?? []
+    }
+
+    private func executeSingleToolBody(
+        tool: FunctionTool,
+        toolCall: ResponseFunctionToolCall,
+        rawToolCall: ResponseFunctionToolCall,
+        toolContext: ToolContext
+    ) async throws -> FunctionToolResult {
+        // A nested agent-tool continuation already started this call before it was interrupted.
+        let isNestedContinuation = !nestedInterruptions(rawToolCall).isEmpty
+        if !isNestedContinuation {
+            try contextWrapper.markToolInvocationExecuted(toolCall.json, toolLookupKey: getFunctionToolLookupKeyForTool(tool))
+            if let rejected = try await executeToolInputGuardrails(tool: tool, toolContext: toolContext, agent: agent, results: inputGuardrailResults) {
+                let provider = functionToolErrorOutput(toolCall: toolCall.json, output: rejected, outputJSONSchema: tool.outputJSONSchema)
+                return FunctionToolResult(
+                    tool: tool,
                     output: rejected,
-                    toolOrigin: getFunctionToolOrigin(tool)
+                    runItem: ToolCallOutputItem(
+                        agent: agent,
+                        rawItem: try ItemHelpers.toolCallOutputItem(toolCall, output: provider),
+                        output: rejected,
+                        toolOrigin: getFunctionToolOrigin(tool)
+                    )
                 )
-            )
+            }
+
+            async let startHook: Void = hooks.onToolStart(context: toolContext, agent: agent, tool: tool)
+            async let agentStartHook: Void = agent.hooks?.onToolStart(context: toolContext, agent: agent, tool: tool) ?? ()
+            _ = try await (startHook, agentStartHook)
         }
 
-        async let startHook: Void = hooks.onToolStart(context: toolContext, agent: agent, tool: tool)
-        async let agentStartHook: Void = agent.hooks?.onToolStart(context: toolContext, agent: agent, tool: tool) ?? ()
-        _ = try await (startHook, agentStartHook)
-
         let invocation = try await invokeFunctionToolWithMetadata(tool: tool, context: toolContext, arguments: toolCall.arguments)
+        if !nestedInterruptions(rawToolCall).isEmpty {
+            return FunctionToolResult(tool: tool, output: invocation.output, runItem: nil)
+        }
         let guarded = try await executeToolOutputGuardrails(
             tool: tool, toolContext: toolContext, agent: agent, realResult: invocation.output, results: outputGuardrailResults
         )

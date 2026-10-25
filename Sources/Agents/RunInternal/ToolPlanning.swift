@@ -136,6 +136,7 @@ func dedupeProcessedResponseInvocations(
     contextWrapper: RunContextWrapper,
     existingItems: [RunItem],
     deferredBindingValidation: Set<ObjectIdentifier> = [],
+    deferredFunctionCalls: Set<AgentToolCallSignature> = [],
     filterCompleted: Bool = true
 ) throws -> Set<ObjectIdentifier> {
     let completedHistoricalInvocations = try completedHistoricalInvocations(existingItems, contextWrapper: contextWrapper)
@@ -150,7 +151,10 @@ func dedupeProcessedResponseInvocations(
     deduplicator.skipped = preflight.skipped
 
     processedResponse.functions = try processedResponse.functions.filter {
-        try deduplicator.shouldKeep($0.toolCall.json, callItem: $0.callItem, toolLookupKey: getFunctionToolLookupKeyForTool($0.functionTool))
+        try deduplicator.shouldKeep(
+            $0.toolCall.json, callItem: $0.callItem, toolLookupKey: getFunctionToolLookupKeyForTool($0.functionTool),
+            deferBindingValidation: deferredFunctionCalls.contains(AgentToolCallSignature($0.toolCall.json))
+        )
     }
     processedResponse.handoffs = try processedResponse.handoffs.filter {
         try deduplicator.shouldKeep($0.toolCall.json, callItem: $0.callItem, invocationRole: "handoff")
@@ -275,7 +279,8 @@ private struct ResponseInvocationDeduplicator {
         callItem: RunItem?,
         toolLookupKey: FunctionToolLookupKey? = nil,
         toolName: String? = nil,
-        invocationRole: String? = nil
+        invocationRole: String? = nil,
+        deferBindingValidation: Bool = false
     ) throws -> Bool {
         let callIdentity = toolInvocationCallId(rawItem)
         if let callIdentity, callIdentity.callId == nil {
@@ -313,7 +318,7 @@ private struct ResponseInvocationDeduplicator {
         }
         currentResponseInvocations[identity.callId] = identity
 
-        if callItemId(callItem).map(deferredBindingValidation.contains) != true {
+        if !deferBindingValidation, callItemId(callItem).map(deferredBindingValidation.contains) != true {
             let binding: ToolInvocationStatus?
             do {
                 binding = try contextWrapper.toolInvocationStatus(rawItem, toolLookupKey: toolLookupKey, toolName: toolName, invocationRole: invocationRole)

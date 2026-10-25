@@ -178,6 +178,9 @@ func buildRunStateFromJSON(
     )
     state.currentAgent = currentAgent
     state.schemaVersion = schemaVersion
+    let toolStateScope = AgentToolStateScope()
+    state.agentToolStateScope = toolStateScope
+    setAgentToolStateScope(context, toolStateScope)
     state.currentTurn = stateJSON["current_turn"]?.intValue ?? 0
 
     if let pendingInput = stateJSON["pending_input"] {
@@ -192,7 +195,10 @@ func buildRunStateFromJSON(
 
     if let processedData = stateJSON["last_processed_response"]?.objectValue {
         state.lastProcessedResponse = try await deserializeProcessedResponse(
-            processedData, currentAgent: currentAgent, context: context, agents: agents
+            processedData, currentAgent: currentAgent, context: context, agents: agents,
+            nestedRuns: NestedAgentToolRunRestore(
+                scope: toolStateScope, contextDeserializer: contextDeserializer, strictContext: strictContext
+            )
         )
     }
 
@@ -805,7 +811,8 @@ func deserializeProcessedResponse(
     _ data: JSONObject,
     currentAgent: Agent,
     context: RunContextWrapper,
-    agents: RunStateAgentResolver
+    agents: RunStateAgentResolver,
+    nestedRuns: NestedAgentToolRunRestore? = nil
 ) async throws -> ProcessedResponse {
     let newItems = try deserializeItems(data["new_items"]?.arrayValue ?? [], agents: agents)
     let tools = try RestoredToolMaps(allTools: try await currentAgent.getAllTools(context), currentAgent: currentAgent)
@@ -824,7 +831,11 @@ func deserializeProcessedResponse(
     for entry in entries("functions") {
         guard let lookupKey = resolveFunctionLookupKey(entry), let tool = tools.functions[lookupKey],
               let call = validatedFunctionToolCall(toolCall(entry)) else { continue }
-        functions.append(ToolRunFunction(toolCall: call, functionTool: tool))
+        let run = ToolRunFunction(toolCall: call, functionTool: tool)
+        functions.append(run)
+        if let nestedRuns, let nestedData = entry["agent_run_state"]?.objectValue {
+            try await nestedRuns.restore(nestedData, for: run, currentAgent: currentAgent)
+        }
     }
 
     var handoffs: [ToolRunHandoff] = []
@@ -902,6 +913,40 @@ func deserializeProcessedResponse(
             bindings[pair.key] = MCPToolBinding(json: pair.value)
         }
     )
+}
+
+/// Rehydrates nested agent-as-tool run state into the agent-tool cache (upstream
+/// `_restore_pending_nested_agent_tool_runs`).
+struct NestedAgentToolRunRestore {
+    var scope: AgentToolStateScope
+    var contextDeserializer: ContextDeserializer?
+    var strictContext: Bool
+
+    func restore(_ nestedData: JSONObject, for run: ToolRunFunction, currentAgent: Agent) async throws {
+        // A nested run serializes agent references relative to the agent tool's own agent, so that
+        // agent must also be the root when the references are resolved again.
+        let nestedRootAgent = run.functionTool.agentInstance ?? currentAgent
+        let nestedState: RunState
+        do {
+            nestedState = try await buildRunStateFromJSON(
+                initialAgent: nestedRootAgent,
+                stateJSON: nestedData,
+                contextOverride: nil,
+                contextDeserializer: contextDeserializer,
+                strictContext: strictContext
+            )
+        } catch {
+            if strictContext { throw error }
+            logger.warning("Failed to deserialize nested agent run state for tool call \(run.toolCall.callId).")
+            return
+        }
+        let interruptions = nestedState.getInterruptions()
+        guard !interruptions.isEmpty else { return }
+        // Replace any stale entry for the same call so resumed runs do not read older pending
+        // interruptions after consuming this restored entry.
+        dropAgentToolRunResult(run.toolCall.json, scope: scope)
+        recordAgentToolRunResult(run.toolCall.json, .serialized(nestedState, interruptions: interruptions), scope: scope)
+    }
 }
 
 /// Resolves the lookup key for a serialized function action.

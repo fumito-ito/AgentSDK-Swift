@@ -6,13 +6,11 @@ import AgentsTesting
 // Ported from tests/test_hitl_error_scenarios.py: regression tests for HITL edge cases.
 //
 // Swift: the tests are split by topic across `HITLErrorScenariosTests+Resume.swift` (direct
-// `resolveInterruptedTurn` calls) and `HITLErrorScenariosTests+Approvals.swift` (resume selection,
-// execution-time decisions, and MCP callbacks).
+// `resolveInterruptedTurn` calls), `HITLErrorScenariosTests+Approvals.swift` (resume selection,
+// execution-time decisions, and MCP callbacks), and `HITLErrorScenariosTests+Nested.swift` (nested
+// `Agent.asTool()` scenarios).
 //
 // Not ported here:
-// - The nested `Agent.asTool()` scenarios (`test_nested_agent_tool_*`,
-//   `test_changed_nested_parent_fails_before_tool_inventory_callbacks`, and
-//   `test_agent_as_tool_with_nested_approvals_propagates`) wait for the `agent_tool_state.py` port.
 // - `test_function_needs_approval_invalid_type_raises` and
 //   `test_resume_invalid_needs_approval_raises`: `ToolApprovalRequirement` is either a Bool or a
 //   policy, so an invalid setting cannot be constructed.

@@ -132,6 +132,7 @@ struct ResultStateFields {
     var currentStep: RunStateStep?
 }
 
+@discardableResult
 func populateState(_ state: RunState, from result: any RunResultBase & RunResultReplayData, fields: ResultStateFields) -> RunState {
     state.currentAgent = result.lastAgent
     state.generatedItems = result.modelInputItems.isEmpty && !result.replayFromModelInputItems ? result.newItems : result.modelInputItems
@@ -179,6 +180,8 @@ public final class RunResult: RunResultBase, RunResultReplayData, @unchecked Sen
     var reasoningItemIdPolicy: ReasoningItemIdPolicy?
     var nestedHistoryOwnedItems: [RunItem] = []
     var stateFields = ResultStateFields()
+    /// Pending nested agent-tool states moved out of the run scope by the first `toState()`.
+    let checkpointNestedStateTemplates = SharedBox<[AgentToolCallSignature: RunState]>([:])
 
     init(
         input: RunInput,
@@ -225,7 +228,9 @@ public final class RunResult: RunResultBase, RunResultReplayData, @unchecked Sen
             startingAgent: stateFields.startingAgent ?? lastAgent,
             maxTurns: maxTurns
         )
-        return populateState(state, from: self, fields: stateFields)
+        populateState(state, from: self, fields: stateFields)
+        copyPendingNestedAgentToolStates(state, from: self, templates: checkpointNestedStateTemplates)
+        return state
     }
 
     public var description: String {
@@ -276,6 +281,9 @@ public final class RunResultStreaming: RunResultBase, RunResultReplayData, @unch
     public let contextWrapper: RunContextWrapper
     /// The maximum number of turns the agent can run for, or `nil` for no limit.
     public let maxTurns: Int?
+
+    /// Pending nested agent-tool states moved out of the run scope by the first `toState()`.
+    let checkpointNestedStateTemplates = SharedBox<[AgentToolCallSignature: RunState]>([:])
 
     private let events: AsyncThrowingStream<StreamEvent, any Error>
     private let continuation: AsyncThrowingStream<StreamEvent, any Error>.Continuation
@@ -422,7 +430,9 @@ public final class RunResultStreaming: RunResultBase, RunResultReplayData, @unch
             startingAgent: fields.startingAgent ?? currentAgent,
             maxTurns: maxTurns
         )
-        return populateState(state, from: self, fields: fields)
+        populateState(state, from: self, fields: fields)
+        copyPendingNestedAgentToolStates(state, from: self, templates: checkpointNestedStateTemplates)
+        return state
     }
 
     public var description: String {

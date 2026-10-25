@@ -158,7 +158,12 @@ extension RunState {
         result["session_items"] = .array(sessionItems.map { .object(serializeRunItem($0, identityKeys)) })
         result["current_step"] = serializeCurrentStep(identityKeys)
         result["last_model_response"] = modelResponses.last.map(JSONValue.object) ?? .null
-        result["last_processed_response"] = lastProcessedResponse.map { .object(serializeProcessedResponse($0, identityKeys)) } ?? .null
+        result["last_processed_response"] = try lastProcessedResponse.map {
+            .object(try serializeProcessedResponse(
+                $0, identityKeys, contextSerializer: contextSerializer, strictContext: strictContext,
+                includeTracingAPIKey: includeTracingAPIKey
+            ))
+        } ?? .null
         result["current_turn_persisted_item_count"] = .int(currentTurnPersistedItemCount)
         result["trace"] = traceState?.toJSON(includeTracingAPIKey: includeTracingAPIKey).map(JSONValue.object) ?? .null
         return result
@@ -529,7 +534,13 @@ extension RunState {
         }
     }
 
-    func serializeProcessedResponse(_ processed: ProcessedResponse, _ identityKeys: [ObjectIdentifier: String]?) -> JSONObject {
+    func serializeProcessedResponse(
+        _ processed: ProcessedResponse,
+        _ identityKeys: [ObjectIdentifier: String]?,
+        contextSerializer: ContextSerializer? = nil,
+        strictContext: Bool = false,
+        includeTracingAPIKey: Bool = false
+    ) throws -> JSONObject {
         var result: JSONObject = [
             "new_items": .array(processed.newItems.map { .object(serializeRunItem($0, identityKeys)) }),
             "tools_used": .array(processed.toolsUsed.map(JSONValue.string)),
@@ -537,11 +548,50 @@ extension RunState {
         for (key, value) in serializeToolActionGroups(processed) {
             result[key] = value
         }
+        if case .array(let entries)? = result["functions"] {
+            result["functions"] = .array(try serializePendingNestedAgentToolRuns(
+                functionEntries: entries, functionRuns: processed.functions, contextSerializer: contextSerializer,
+                strictContext: strictContext, includeTracingAPIKey: includeTracingAPIKey
+            ))
+        }
         result["interruptions"] = .array(processed.interruptions.map {
             .object(serializeToolApprovalInterruption($0, includeToolName: true, identityKeys))
         })
         result["mcp_tool_bindings"] = .object(JSONObject(processed.mcpToolBindings.mapValues(\.json)))
         return result
+    }
+}
+
+extension RunState {
+    /// Attaches serialized nested run state for pending agent-as-tool interruptions (upstream
+    /// `_serialize_pending_nested_agent_tool_runs`).
+    func serializePendingNestedAgentToolRuns(
+        functionEntries: [JSONValue],
+        functionRuns: [ToolRunFunction],
+        contextSerializer: ContextSerializer?,
+        strictContext: Bool,
+        includeTracingAPIKey: Bool
+    ) throws -> [JSONValue] {
+        var entries = functionEntries
+        for (index, run) in functionRuns.enumerated() where index < entries.count {
+            guard case .object(var entry) = entries[index],
+                  let pendingResult = peekAgentToolRunResult(run.toolCall.json, scope: agentToolStateScope),
+                  !pendingResult.interruptions.isEmpty else { continue }
+            let nestedState = pendingResult.toState()
+            // Defensive guard against accidental self-referential serialization loops.
+            guard nestedState !== self else { continue }
+            do {
+                entry["agent_run_state"] = .object(try nestedState.toJSON(
+                    contextSerializer: contextSerializer, strictContext: strictContext, includeTracingAPIKey: includeTracingAPIKey
+                ))
+            } catch {
+                if strictContext { throw error }
+                logger.warning("Failed to serialize nested agent run state for tool call \(run.toolCall.callId).")
+                continue
+            }
+            entries[index] = .object(entry)
+        }
+        return entries
     }
 }
 

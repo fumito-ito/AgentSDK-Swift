@@ -5,15 +5,13 @@ import AgentsTesting
 
 // Ported from tests/test_run_state.py (classes TestDeserializeHelpers and TestRunStateResumption).
 //
-// Swift: nested agent-tool run state (`agent_tool_state.py`) and approval ambiguity checks across
-// nested states are not ported yet. The tests that depend on them (`test_ambiguous_*`,
-// `test_unsafe_*`, `test_uncopyable_*`, `test_safe_noncanonical_*`, `test_exact_uncopyable_*`,
+// The nested agent-tool state cases (`test_ambiguous_*`,
 // `test_completed_current_invocation_does_not_own_nested_approval`,
 // `test_native_current_and_nested_approval_identity_fails_closed`, `test_*nested_agent_tool_*`
 // except the plain round trip, and
-// `test_nested_resume_checkpoint_to_state_keeps_its_owned_decision_ledger`) are pending in
-// porting/manifest.json. `test_result_to_state_detaches_tool_decision_ledgers` is in
-// RunStateTests+InvocationLedger.swift.
+// `test_nested_resume_checkpoint_to_state_keeps_its_owned_decision_ledger`) are in
+// RunStateTests+NestedAgentTools.swift, which also lists the cases that are not ported.
+// `test_result_to_state_detaches_tool_decision_ledgers` is in RunStateTests+InvocationLedger.swift.
 
 @Suite struct RunStateDeserializeHelpersTests {
     @Test func testSerializationIncludesHandoffFields() async throws {

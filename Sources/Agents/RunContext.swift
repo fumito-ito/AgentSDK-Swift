@@ -137,7 +137,9 @@ open class RunContextWrapper: @unchecked Sendable {
     /// The context object passed by you to `Runner.run()`.
     public var context: any Sendable
 
-    let usageBox: SharedBox<Usage>
+    /// Swift: a `var` so a resumed nested `Agent.asTool()` run can bill the outer run's usage
+    /// (upstream rebinds `context.usage`).
+    var usageBox: SharedBox<Usage>
     let toolStateBox: SharedBox<ToolApprovalState>
 
     /// The usage of the agent run so far. Forked contexts (for example `ToolContext`) share it.
@@ -151,6 +153,10 @@ open class RunContextWrapper: @unchecked Sendable {
 
     /// Structured input for the current agent tool run, when available.
     public var toolInput: (any Sendable)?
+
+    /// The private cache scope for nested `Agent.asTool()` results (upstream
+    /// `_agent_tool_state_scope_id`).
+    var agentToolStateScope: AgentToolStateScope?
 
     public init(context: any Sendable = (), usage: Usage = Usage(), turnInput: [TResponseInputItem] = []) {
         self.context = context
@@ -266,13 +272,24 @@ open class RunContextWrapper: @unchecked Sendable {
     ///
     /// Permanent function-tool decisions apply only to the approval item's agent.
     public func approveTool(_ approvalItem: ToolApprovalItem, alwaysApprove: Bool = false) throws {
-        try toolStateBox.mutate { try $0.applyApprovalDecision(approvalItem, always: alwaysApprove, approve: true) }
+        try applyApproval(approvalItem, alwaysApprove: alwaysApprove)
     }
 
     /// Rejects a tool call, optionally for all future calls of the same tool.
     ///
     /// Permanent function-tool decisions apply only to the approval item's agent.
     public func rejectTool(_ approvalItem: ToolApprovalItem, alwaysReject: Bool = false, rejectionMessage: String? = nil) throws {
+        try applyRejection(approvalItem, alwaysReject: alwaysReject, rejectionMessage: rejectionMessage)
+    }
+
+    /// Records an approval on this context without routing it to a nested agent-tool run
+    /// (upstream calls `RunContextWrapper.approve_tool` unbound).
+    final func applyApproval(_ approvalItem: ToolApprovalItem, alwaysApprove: Bool = false) throws {
+        try toolStateBox.mutate { try $0.applyApprovalDecision(approvalItem, always: alwaysApprove, approve: true) }
+    }
+
+    /// Records a rejection on this context without routing it to a nested agent-tool run.
+    final func applyRejection(_ approvalItem: ToolApprovalItem, alwaysReject: Bool = false, rejectionMessage: String? = nil) throws {
         try toolStateBox.mutate {
             try $0.applyApprovalDecision(approvalItem, always: alwaysReject, approve: false, rejectionMessage: rejectionMessage)
         }
@@ -345,13 +362,15 @@ open class RunContextWrapper: @unchecked Sendable {
 
     /// Copies SDK-owned state for an independently resumable checkpoint.
     func copyForRunState() -> RunContextWrapper {
-        RunContextWrapper(
+        let copied = RunContextWrapper(
             context: context,
             usageBox: SharedBox(usage),
             toolStateBox: SharedBox(toolStateBox.value),
             turnInput: turnInput,
             toolInput: toolInput
         )
+        copied.agentToolStateScope = AgentToolStateScope()
+        return copied
     }
 }
 

@@ -74,7 +74,7 @@
       "swift": [
         "Sources/Agents/Agent.swift"
       ],
-      "notes": "Nested agent-tool approval routing not ported."
+      "notes": "as_tool runs nested agents with their own approvals and resumes interrupted nested runs from the agent-tool cache (D20). Pending: on_stream_max_pending_events backlog handling."
     },
     "src/agents/agent_output.py": {
       "status": "ported",
@@ -91,9 +91,11 @@
       "notes": ""
     },
     "src/agents/agent_tool_state.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Sources/Agents/AgentToolState.swift"
+      ],
+      "notes": "Entries are keyed by tool call signature in a shared AgentToolStateScope object instead of tool call object identity (D20)."
     },
     "src/agents/apply_diff.py": {
       "status": "ported",
@@ -794,7 +796,7 @@
       "swift": [
         "Sources/Agents/Result.swift"
       ],
-      "notes": "release_agents and nested-history filtering not ported."
+      "notes": "to_state copies pending nested agent-tool states into the new state scope (D20). A stream consumer cancelled while waiting cancels the streamed run, as stream_events does. release_agents and nested-history filtering not ported."
     },
     "src/agents/retry.py": {
       "status": "ported",
@@ -808,7 +810,7 @@
       "swift": [
         "Sources/Agents/Run.swift"
       ],
-      "notes": "run_sync skipped; sandbox and blocked-output replacement not ported."
+      "notes": "run_sync skipped; sandbox and blocked-output replacement not ported. Fresh runs get their own agent-tool state scope (D20)."
     },
     "src/agents/run_config.py": {
       "status": "ported",
@@ -823,7 +825,7 @@
         "Sources/Agents/RunContext.swift",
         "Sources/Agents/RunContextApprovals.swift"
       ],
-      "notes": "Approval records, agent-owned function keys, hosted MCP typed keys, and the invocation ledger are ported (D16). Skipped: detached owner keys for pydantic/Temporal context converters. Pending: agent_tool_state scope on checkpoint copies."
+      "notes": "Approval records, agent-owned function keys, hosted MCP typed keys, and the invocation ledger are ported (D16). Checkpoint copies get a fresh agent-tool state scope (D20). Skipped: detached owner keys for pydantic/Temporal context converters."
     },
     "src/agents/run_error_handlers.py": {
       "status": "ported",
@@ -853,7 +855,7 @@
         "Sources/Agents/Run.swift",
         "Sources/Agents/RunInternal/TurnPreparation.swift"
       ],
-      "notes": "resolve_resumed_context is resolveResumedContext in Run.swift."
+      "notes": "resolve_resumed_context is resolveResumedContext in Run.swift and binds the state's agent-tool scope to the context."
     },
     "src/agents/run_internal/agent_tool_configuration.py": {
       "status": "pending",
@@ -891,7 +893,7 @@
       "swift": [
         "Sources/Agents/RunInternal/RunInternalItems.swift"
       ],
-      "notes": "Renamed (D10); nested-history provenance not ported. Fingerprints use Python json.dumps formatting so digests match Python-written snapshots."
+      "notes": "Renamed (D10); nested-history provenance not ported. Fingerprints use Python json.dumps formatting so digests match Python-written snapshots. function_rejection_item drops the rejected call's nested agent-tool result."
     },
     "src/agents/run_internal/model_provider_lifecycle.py": {
       "status": "pending",
@@ -969,7 +971,7 @@
       "swift": [
         "Sources/Agents/RunInternal/ToolExecution.swift"
       ],
-      "notes": "Function tools, hosted MCP callbacks, manual MCP reconciliation, and process_hosted_mcp_approvals use the invocation ledger. Function approvals reuse the prepared arguments (D18). Pending: nested agent-tool interruption routing and sibling cancellation bookkeeping."
+      "notes": "Function tools, hosted MCP callbacks, manual MCP reconciliation, and process_hosted_mcp_approvals use the invocation ledger. Function approvals reuse the prepared arguments (D18). Nested agent-tool interruptions withhold the outer output and continue without rerunning the outer callbacks (D20). Pending: sibling cancellation bookkeeping."
     },
     "src/agents/run_internal/tool_planning.py": {
       "status": "partial",
@@ -999,7 +1001,7 @@
         "Sources/Agents/RunInternal/TurnResolution.swift",
         "Sources/Agents/RunInternal/InterruptedTurnResolution.swift"
       ],
-      "notes": "Fresh and resumed turns validate invocations against the ledger. Resume reconciles interrupted calls and pending approvals against the current tool inventory (including local MCP recipient bindings) and checkpoints tool outputs into the RunState as they finish; resolve_interrupted_turn lives in InterruptedTurnResolution.swift (D19). Pending: response_accepted resume, nested Agent.as_tool() run state (agent_tool_state.py), PTC parent validation, and blocked-output replacement."
+      "notes": "Fresh and resumed turns validate invocations against the ledger. Resume reconciles interrupted calls and pending approvals against the current tool inventory (including local MCP recipient bindings and nested Agent.as_tool() runs) and checkpoints tool outputs into the RunState as they finish; resolve_interrupted_turn lives in InterruptedTurnResolution.swift (D19, D20). Pending: response_accepted resume, PTC parent validation, and blocked-output replacement."
     },
     "src/agents/run_state.py": {
       "status": "partial",
@@ -1007,9 +1009,10 @@
         "Sources/Agents/RunState.swift",
         "Sources/Agents/RunStateSerialization.swift",
         "Sources/Agents/RunStateDeserialization.swift",
-        "Sources/Agents/RunStateInvocationValidation.swift"
+        "Sources/Agents/RunStateInvocationValidation.swift",
+        "Sources/Agents/RunStateNestedAgentTools.swift"
       ],
-      "notes": "JSON serialization (schema 1.18) ported (D13), including the tool invocation ledger, agent-owned function approvals, hosted MCP query records, local MCP recipient bindings, and completed-invocation validation with legacy reconstruction. Pending: nested agent-tool run states, nested history ownership retention (validated, then dropped), pending Session writes, terminal-unrecoverable marker, programmatic tool calling resume checks, current-response item identity restore, error redaction, and sandbox payloads (out of scope)."
+      "notes": "JSON serialization (schema 1.18) ported (D13), including the tool invocation ledger, agent-owned function approvals, hosted MCP query records, local MCP recipient bindings, completed-invocation validation with legacy reconstruction, and pending nested agent-tool run states with approval routing (D20). Pending: nested history ownership retention (validated, then dropped), pending Session writes, terminal-unrecoverable marker, programmatic tool calling resume checks, current-response item identity restore, error redaction, and sandbox payloads (out of scope)."
     },
     "src/agents/sandbox/__init__.py": {
       "status": "out_of_scope",
@@ -1515,7 +1518,7 @@
       "swift": [
         "Sources/Agents/ToolContext.swift"
       ],
-      "notes": ""
+      "notes": "approve_tool and reject_tool route surfaced nested approvals to the nested agent-tool context."
     },
     "src/agents/tool_guardrails.py": {
       "status": "ported",
@@ -3146,9 +3149,11 @@
       "notes": "Sandbox runtime is out of scope (D2)."
     },
     "tests/test_agent_as_tool.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "partial",
+      "swift": [
+        "Tests/AgentsTests/AgentAsToolTests.swift"
+      ],
+      "notes": "Ported: the nested approval and resume cases, adapted to resume real nested RunStates instead of monkeypatching Runner.run. Skipped: test_agent_as_tool_preserves_scope_for_nested_tool_context and test_agent_as_tool_preserves_scope_for_nested_run_context_wrapper (they read the scope inside the patched runner; Swift as_tool only receives a ToolContext). Pending: derived names and collisions, enablement, output extraction, run config inheritance, structured input, streaming, failure handling, and the on_stream backlog."
     },
     "tests/test_agent_as_tool_callback_validation.py": {
       "status": "pending",
@@ -3250,9 +3255,11 @@
       "notes": ""
     },
     "tests/test_agent_tool_state.py": {
-      "status": "pending",
-      "swift": [],
-      "notes": ""
+      "status": "ported",
+      "swift": [
+        "Tests/AgentsTests/AgentToolStateTests.swift"
+      ],
+      "notes": "Skipped: test_drop_agent_tool_run_result_handles_cleared_globals (interpreter shutdown). The ambiguous-signature and garbage-collection cases assert the signature-keyed scope behavior (D20)."
     },
     "tests/test_agent_tracing.py": {
       "status": "pending",
@@ -3505,9 +3512,10 @@
       "swift": [
         "Tests/AgentsTests/HITLErrorScenariosTests.swift",
         "Tests/AgentsTests/HITLErrorScenariosTests+Resume.swift",
-        "Tests/AgentsTests/HITLErrorScenariosTests+Approvals.swift"
+        "Tests/AgentsTests/HITLErrorScenariosTests+Approvals.swift",
+        "Tests/AgentsTests/HITLErrorScenariosTests+Nested.swift"
       ],
-      "notes": "Skipped: test_function_needs_approval_invalid_type_raises and test_resume_invalid_needs_approval_raises (an invalid needs_approval cannot be constructed in Swift). Pending: the nested Agent.as_tool() scenarios (agent_tool_state.py) and test_resume_checkpoints_computer_output_before_custom_data_failure (ComputerTool.custom_data_extractor). Execution-clone tests resume with the public agent because only sandbox agents create clones (D2)."
+      "notes": "Skipped: test_function_needs_approval_invalid_type_raises and test_resume_invalid_needs_approval_raises (an invalid needs_approval cannot be constructed in Swift). Pending: test_resume_checkpoints_computer_output_before_custom_data_failure (ComputerTool.custom_data_extractor). Execution-clone tests resume with the public agent because only sandbox agents create clones (D2)."
     },
     "tests/test_hitl_session_scenario.py": {
       "status": "pending",
@@ -3789,9 +3797,10 @@
         "Tests/AgentsTests/RunStateTests+SerializationEdgeCases.swift",
         "Tests/AgentsTests/RunStateTests+SchemaEdgeCases.swift",
         "Tests/AgentsTests/RunStateTests+ToolApprovalItem.swift",
-        "Tests/AgentsTests/RunStateTests+InvocationLedger.swift"
+        "Tests/AgentsTests/RunStateTests+InvocationLedger.swift",
+        "Tests/AgentsTests/RunStateTests+NestedAgentTools.swift"
       ],
-      "notes": "Pending until their modules are ported: nested agent-tool state cases (agent_tool_state.py), programmatic tool calling resume checks (tool_caller.py), and nested history ownership round trips. Skipped: pydantic/deepcopy snapshot cases, Python truthiness, bare string input items, ad-hoc tool attributes, and sandbox cases (out of scope). Each file lists the cases at its top."
+      "notes": "Pending until their modules are ported: programmatic tool calling resume checks (tool_caller.py) and nested history ownership round trips. Skipped: pydantic/deepcopy snapshot cases, uncopyable or unsafe approval payloads (test_unsafe_*, test_uncopyable_*, test_safe_noncanonical_*, test_exact_uncopyable_*), Python truthiness, bare string input items, ad-hoc tool attributes, and sandbox cases (out of scope). Each file lists the cases at its top."
     },
     "tests/test_run_state_agent_identity.py": {
       "status": "ported",
@@ -3941,7 +3950,7 @@
         "Tests/AgentsTests/ToolApprovalCallIdReuseTests+Snapshots.swift",
         "Tests/AgentsTests/ToolApprovalCallIdReuseTests+HostedMCP.swift"
       ],
-      "notes": "Skipped: pydantic model_dump cases. Pending: nested agent-tool cases (agent_tool_state.py)."
+      "notes": "Skipped: pydantic model_dump cases."
     },
     "tests/test_tool_choice_reset.py": {
       "status": "ported",

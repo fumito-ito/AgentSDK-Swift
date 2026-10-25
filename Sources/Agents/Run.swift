@@ -422,6 +422,7 @@ private final class RunDriver: @unchecked Sendable {
             guard case .input(let raw) = input else { fatalError("unreachable") }
             isResumedState = false
             let wrapper = contextWrapper ?? RunContextWrapper()
+            setAgentToolStateScope(wrapper, AgentToolStateScope())
             self.contextWrapper = wrapper
             self.rawInput = raw
             self.originalUserInput = raw
@@ -979,9 +980,8 @@ private final class RunDriver: @unchecked Sendable {
         }
         let agent = currentAgent
         let turnResult = try await withOptionalCurrentSpan(currentSpan) {
-            let allTools = try await agent.getAllTools(contextWrapper)
-            return try await resolveInterruptedTurn(
-                agent: agent, allTools: allTools, originalInput: originalInput, originalPreStepItems: generatedItems,
+            try await resolveInterruptedTurn(
+                agent: agent, allTools: nil, originalInput: originalInput, originalPreStepItems: generatedItems,
                 newResponse: lastResponse, processedResponse: processed, hooks: hooks, contextWrapper: contextWrapper,
                 runConfig: runConfig, serverManagesConversation: serverConversationTracker != nil, errorHandlers: errorHandlers,
                 runState: runState
@@ -1164,6 +1164,7 @@ func ensureContextWrapper(_ context: any Sendable) -> RunContextWrapper {
 @discardableResult
 func resolveResumedContext(runState: RunState, context: (any Sendable)?) -> RunContextWrapper {
     let existing = runState.context
+    setAgentToolStateScope(existing, runState.agentToolStateScope)
     guard let context else { return existing }
     if let wrapper = context as? RunContextWrapper {
         if wrapper !== existing { existing.context = wrapper.context }
