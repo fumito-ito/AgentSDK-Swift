@@ -78,6 +78,42 @@ struct ToolRunApplyPatchCall: Sendable {
     var callItem: RunItem?
 }
 
+/// The MCP server and tool a local MCP function tool call was routed to (upstream
+/// `FunctionTool._mcp_tool_binding`, a `(server_name, tool_name, server_index)` tuple).
+struct MCPToolBinding: Sendable, Hashable {
+    var serverName: String
+    var toolName: String
+    var serverIndex: Int?
+
+    init(serverName: String, toolName: String, serverIndex: Int?) {
+        self.serverName = serverName
+        self.toolName = toolName
+        self.serverIndex = serverIndex
+    }
+
+    init?(_ tool: FunctionTool) {
+        guard let binding = tool.mcpToolBinding else { return nil }
+        self.init(serverName: binding.serverName, toolName: binding.toolName, serverIndex: binding.serverIndex)
+    }
+
+    /// The serialized `[server_name, tool_name, server_index]` list.
+    var json: JSONValue {
+        [.string(serverName), .string(toolName), serverIndex.map { .int($0) } ?? .null]
+    }
+
+    init?(json: JSONValue?) {
+        guard let values = json?.arrayValue, values.count == 3, let serverName = values[0].stringValue,
+              let toolName = values[1].stringValue else { return nil }
+        let serverIndex: Int?
+        switch values[2] {
+        case .null: serverIndex = nil
+        case .int(let value): serverIndex = value
+        default: return nil
+        }
+        self.init(serverName: serverName, toolName: toolName, serverIndex: serverIndex)
+    }
+}
+
 /// The model response mapped to run items and local tool work.
 struct ProcessedResponse: Sendable {
     var newItems: [RunItem]
@@ -95,6 +131,9 @@ struct ProcessedResponse: Sendable {
     var interruptions: [ToolApprovalItem]
     var functionToolsNotFound: [ToolRunFunctionNotFound] = []
     var customToolCalls: [ToolRunCustom] = []
+    /// The MCP recipient of each local MCP function call, by call ID, so a resumed call cannot be
+    /// routed to a different server or a local replacement.
+    var mcpToolBindings: [String: MCPToolBinding] = [:]
 
     /// Handoffs, functions, and local actions need local processing; hosted tools already ran.
     func hasToolsOrApprovalsToRun() -> Bool {

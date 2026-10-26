@@ -178,9 +178,6 @@ extension ToolApprovalCallIdReuseTests {
         }
     }
 
-    // Swift: upstream drives `_collect_runs_by_approval` directly. Swift evaluates native tool
-    // approvals inside each action, so this checks the lookup that helper performs first: the
-    // changed pending call fails against the restored binding before any approval policy runs.
     @Test(arguments: ["1.13", "1.14"])
     func testLegacyChangedPendingCallFailsBeforeApprovalCallback(schemaVersion: String) async throws {
         let approvalCalls = SharedBox<[String]>([])
@@ -206,11 +203,22 @@ extension ToolApprovalCallIdReuseTests {
         state.currentStep = .interruption(interruptions: [ToolApprovalItem(agent: agent, rawItem: changedCall)], responseAccepted: false)
         let restored = try await RunState.fromJSON(agent, legacySnapshot(try state.toJSON(), schemaVersion: schemaVersion))
         let restoredPending = try #require(restored.getInterruptions().first)
-        let current = ToolApprovalItem(agent: agent, rawItem: changedCall, toolName: "record_value")
+        let run = ToolRunFunction(toolCall: try #require(ResponseFunctionToolCall(json: changedCall)), functionTool: recordValue)
 
-        expectError(ModelBehaviorError.self, containing: "unique call ID") {
-            _ = try restored.context.getApprovalStatus(
-                toolName: "record_value", callId: "call_0", existingPending: restoredPending, currentInvocation: current
+        await expectErrorAsync(ModelBehaviorError.self, containing: "unique call ID") {
+            _ = try await collectRunsByApproval(
+                [run],
+                callIdExtractor: { $0.toolCall.callId },
+                toolNameResolver: { $0.functionTool.name },
+                rejectionBuilder: { _, _ in restoredPending },
+                contextWrapper: restored.context,
+                approvalItemsByCallId: ["call_0": restoredPending],
+                agent: agent,
+                pendingInterruptionAdder: { _ in },
+                needsApprovalChecker: { _ in
+                    approvalCalls.mutate { $0.append("changed") }
+                    return true
+                }
             )
         }
 

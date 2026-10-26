@@ -897,7 +897,10 @@ func deserializeProcessedResponse(
         toolsUsed: (data["tools_used"]?.arrayValue ?? []).compactMap(\.stringValue),
         mcpApprovalRequests: mcpApprovalRequests,
         interruptions: interruptions,
-        customToolCalls: customToolCalls
+        customToolCalls: customToolCalls,
+        mcpToolBindings: (data["mcp_tool_bindings"]?.objectValue ?? [:]).pairs.reduce(into: [:]) { bindings, pair in
+            bindings[pair.key] = MCPToolBinding(json: pair.value)
+        }
     )
 }
 

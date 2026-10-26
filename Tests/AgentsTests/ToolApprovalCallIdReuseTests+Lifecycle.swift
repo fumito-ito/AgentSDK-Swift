@@ -79,10 +79,51 @@ extension ToolApprovalCallIdReuseTests {
         #expect(executed.value == ["safe"])
     }
 
-    // Swift: test_approved_custom_tool_resume_rebinds_to_current_tool and
-    // test_approved_custom_tool_resume_fails_when_current_tool_is_missing need resume-time
-    // reconciliation against the current tool inventory, which is not ported yet
-    // (porting/manifest.json).
+    @Test func testApprovedCustomToolResumeRebindsToCurrentTool() async throws {
+        let executed = SharedBox<[String]>([])
+        func editor(_ label: String) throws -> CustomTool {
+            try CustomTool(
+                name: "raw_editor",
+                description: "Edit raw text.",
+                onInvokeTool: { _, value in
+                    executed.mutate { $0.append("\(label):\(value)") }
+                    return value
+                },
+                format: ["type": "text"],
+                needsApproval: .required(true)
+            )
+        }
+        let call: JSONObject = ["type": "custom_tool_call", "name": "raw_editor", "call_id": "call_0", "input": "safe"]
+        let model = try ScriptedModel(steps: [.output([call]), .output([getTextMessage("done")])])
+        let agent = Agent(name: "agent", tools: [try editor("original")], model: .instance(model))
+
+        let first = try await Runner.run(agent, input: "edit text")
+        let state = first.toState()
+        try state.approve(state.getInterruptions()[0])
+        agent.tools = [try editor("replacement")]
+
+        let resumed = try await Runner.run(agent, state: state)
+
+        #expect(resumed.finalOutput as? String == "done")
+        #expect(executed.value == ["replacement:safe"])
+    }
+
+    @Test func testApprovedCustomToolResumeFailsWhenCurrentToolIsMissing() async throws {
+        let executed = SharedBox<[String]>([])
+        let call: JSONObject = ["type": "custom_tool_call", "name": "raw_editor", "call_id": "call_0", "input": "safe"]
+        let agent = Agent(name: "agent", tools: [try rawEditor(needsApproval: true, executed: executed)], model: .instance(try ScriptedModel(steps: [.output([call])])))
+
+        let first = try await Runner.run(agent, input: "edit text")
+        let state = first.toState()
+        try state.approve(state.getInterruptions()[0])
+        agent.tools = []
+
+        await expectErrorAsync(ModelBehaviorError.self, containing: "Tool raw_editor not found") {
+            _ = try await Runner.run(agent, state: state)
+        }
+
+        #expect(executed.value.isEmpty)
+    }
 
     @Test func testApprovedApplyPatchCustomResumeUsesPublicTool() async throws {
         let editor = RecordingEditor()
