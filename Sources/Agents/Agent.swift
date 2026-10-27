@@ -361,34 +361,43 @@ public final class Agent: AgentBase, @unchecked Sendable {
                 schemaInfo: shouldCaptureToolInput ? schemaInfo : nil,
                 inputBuilder: inputBuilder
             )
-            let nestedContext = try ToolContext.fromAgentContext(
-                context,
-                toolCallId: context.toolCallId,
-                toolCall: context.toolCall,
-                agent: context.agent,
-                toolName: context.toolName,
-                toolArguments: context.toolArguments,
-                toolNamespace: context.toolNamespace,
-                runConfig: runConfig ?? context.runConfig
-            )
+            let resolvedMaxTurns = maxTurns ?? defaultMaxTurns
+            let resolvedRunConfig = runConfig ?? context.runConfig ?? RunConfig()
+            let toolStateScope = getAgentToolStateScope(context)
+            // Use a fresh ToolContext to avoid sharing approval state with parent runs.
+            let nestedContext = ToolContext(isolatingApprovalsFrom: context, runConfig: runConfig ?? context.runConfig)
+            setAgentToolStateScope(nestedContext, toolStateScope)
             if shouldCaptureToolInput {
                 nestedContext.toolInput = JSONValue.object(json)
             }
-            let resolvedMaxTurns = maxTurns ?? defaultMaxTurns
-            let resolvedRunConfig = runConfig ?? context.runConfig ?? RunConfig()
-            let result: RunResultBase
+
+            let resumeState: RunState?
+            switch try resolveAgentToolResume(context, scope: toolStateScope) {
+            case .fresh: resumeState = nil
+            case .resume(let state): resumeState = state
+            case .stillPending(let output): return output
+            }
+
+            let result: any RunResultBase & RunStateConvertible
             if let onStream {
-                let streaming = try Runner.runStreamed(
-                    self,
-                    input: resolvedInput,
-                    contextWrapper: nestedContext,
-                    maxTurns: resolvedMaxTurns,
-                    hooks: hooks,
-                    runConfig: resolvedRunConfig,
-                    previousResponseId: previousResponseId,
-                    conversationId: conversationId,
-                    session: session
-                )
+                let streaming: RunResultStreaming
+                if let resumeState {
+                    streaming = try Runner.runStreamed(
+                        self, state: resumeState, context: nestedContext, hooks: hooks, runConfig: resolvedRunConfig, session: session
+                    )
+                } else {
+                    streaming = try Runner.runStreamed(
+                        self,
+                        input: resolvedInput,
+                        contextWrapper: nestedContext,
+                        maxTurns: resolvedMaxTurns,
+                        hooks: hooks,
+                        runConfig: resolvedRunConfig,
+                        previousResponseId: previousResponseId,
+                        conversationId: conversationId,
+                        session: session
+                    )
+                }
                 var currentAgent = self
                 for try await event in streaming.streamEvents() {
                     if case .agentUpdated(let updated) = event {
@@ -397,6 +406,10 @@ public final class Agent: AgentBase, @unchecked Sendable {
                     await onStream(AgentToolStreamEvent(event: event, agent: currentAgent, toolCall: context.toolCall))
                 }
                 result = streaming
+            } else if let resumeState {
+                result = try await Runner.run(
+                    self, state: resumeState, context: nestedContext, hooks: hooks, runConfig: resolvedRunConfig, session: session
+                )
             } else {
                 result = try await Runner.run(
                     self,
@@ -410,25 +423,16 @@ public final class Agent: AgentBase, @unchecked Sendable {
                     session: session
                 )
             }
+
+            // Store the run result by tool call so nested interruptions can be read later.
+            if let toolCall = context.toolCall, !result.interruptions.isEmpty {
+                recordAgentToolRunResult(toolCall, .result(result), scope: toolStateScope)
+                return result.finalOutput ?? Optional<String>.none as any Sendable
+            }
             if let customOutputExtractor {
                 return try await customOutputExtractor(result)
             }
-            if let output = result.finalOutput, !((output as? String)?.isEmpty ?? false) {
-                return output
-            }
-            if !result.outputGuardrailResults.isEmpty {
-                return result.finalOutput ?? ""
-            }
-            for item in result.newItems.reversed() {
-                if let message = item as? MessageOutputItem {
-                    let text = ItemHelpers.textMessageOutput(message)
-                    if !text.isEmpty { return text }
-                }
-                if let output = item as? ToolCallOutputItem, let text = output.output as? String, !text.isEmpty {
-                    return text
-                }
-            }
-            return result.finalOutput ?? ""
+            return defaultAgentToolOutput(result)
         }
 
         let tool = try FunctionTool.makeFailureHandlingTool(
@@ -453,4 +457,134 @@ public final class Agent: AgentBase, @unchecked Sendable {
 
 extension Agent: CustomStringConvertible {
     public var description: String { "Agent(name=\"\(name)\", ...)" }
+}
+
+// MARK: - Nested agent-tool approvals
+
+/// How an `Agent.asTool()` call continues a stored nested run.
+enum AgentToolResumeDecision {
+    /// Start a fresh nested run.
+    case fresh
+    /// Resume this nested state.
+    case resume(RunState)
+    /// The nested run still waits for a decision; return this output and keep the stored result.
+    case stillPending(any Sendable)
+}
+
+/// Decides whether an `Agent.asTool()` call resumes the nested run stored for its tool call.
+func resolveAgentToolResume(_ context: ToolContext, scope: AgentToolStateScope?) throws -> AgentToolResumeDecision {
+    guard let toolCall = context.toolCall else { return .fresh }
+    let pendingResult = peekAgentToolRunResult(toolCall, scope: scope)
+    var resumeState = getAgentToolResumeState(pendingResult)
+    if resumeState == nil, let pendingResult, !pendingResult.interruptions.isEmpty {
+        switch try agentToolNestedApprovalsStatus(pendingResult, outerContext: context) {
+        case .pending:
+            return .stillPending(pendingResult.finalOutput ?? Optional<String>.none as any Sendable)
+        case .approved, .rejected:
+            let state = pendingResult.toState()
+            recordAgentToolResumeState(toolCall, state, scope: scope, approvalItems: pendingResult.interruptions)
+            resumeState = state
+        }
+    }
+    guard let resumeState else { return .fresh }
+    // A cached resume reuses the nested state on both paths, so rebind its usage: nested
+    // post-resume model turns must accrue on the current outer ToolContext.
+    resumeState.context.usageBox = context.usageBox
+    return .resume(resumeState)
+}
+
+/// The output of a finished nested run without a custom extractor: the final output, or, when
+/// it is empty and no output guardrail validated it, the latest non-empty message or tool output.
+private func defaultAgentToolOutput(_ result: any RunResultBase) -> any Sendable {
+    if let output = result.finalOutput, !((output as? String)?.isEmpty ?? false) {
+        return output
+    }
+    // Output guardrails validated the final output, not intermediate run items.
+    if !result.outputGuardrailResults.isEmpty {
+        return result.finalOutput ?? ""
+    }
+    for item in result.newItems.reversed() {
+        if let message = item as? MessageOutputItem {
+            let text = ItemHelpers.textMessageOutput(message)
+            if !text.isEmpty { return text }
+        }
+        if let output = item as? ToolCallOutputItem, let text = output.output as? String, !text.isEmpty {
+            return text
+        }
+    }
+    return result.finalOutput ?? ""
+}
+
+/// Whether the approvals a nested `Agent.asTool()` run waits for have decisions.
+enum AgentToolNestedApprovalsStatus {
+    case approved
+    case pending
+    case rejected
+}
+
+/// Reads the decisions recorded for a pending nested run's approvals (upstream
+/// `_nested_approvals_status` in `Agent.as_tool`).
+///
+/// Before schema 1.15, decisions on surfaced nested approvals were recorded on the outer
+/// context. Those legacy decisions are copied onto the nested context that owns the approval.
+func agentToolNestedApprovalsStatus(_ pendingResult: AgentToolRunRecord, outerContext: ToolContext) throws -> AgentToolNestedApprovalsStatus {
+    let nestedState = pendingResult.toState()
+    var hasPending = false
+    var hasDecision = false
+    for interruption in pendingResult.interruptions {
+        let (decisionState, decisionItem) = try nestedState.findNestedApprovalState(interruption) ?? (nestedState, interruption)
+        let decisionContext = decisionState.context
+        guard let callId = getToolApprovalItemCallId(decisionItem) else {
+            hasPending = true
+            continue
+        }
+        let toolName = decisionItem.toolName ?? ""
+        let toolNamespace = RunContextWrapper.resolveToolNamespace(decisionItem)
+        var status = try decisionContext.getApprovalStatus(
+            toolName: toolName, callId: callId, toolNamespace: toolNamespace, existingPending: decisionItem
+        )
+        if status == nil, outerContext.allowLegacyApprovalBindingReconstruction {
+            status = try outerContext.getApprovalStatus(
+                toolName: toolName, callId: callId, toolNamespace: toolNamespace, existingPending: decisionItem
+            )
+            if let status {
+                try copyLegacyNestedDecision(
+                    status, item: decisionItem, callId: callId, from: outerContext, to: decisionContext
+                )
+            }
+        }
+        switch status {
+        case false?: return .rejected
+        case true?: hasDecision = true
+        case nil: hasPending = true
+        }
+    }
+    if hasDecision { return .approved }
+    return hasPending ? .pending : .approved
+}
+
+private func copyLegacyNestedDecision(
+    _ approved: Bool,
+    item: ToolApprovalItem,
+    callId: String,
+    from outerContext: RunContextWrapper,
+    to nestedContext: RunContextWrapper
+) throws {
+    let namespace = RunContextWrapper.resolveToolNamespace(item)
+    let name = RunContextWrapper.resolveToolName(item)
+    let qualifiedKey = namespace.map { "\($0).\(name)" } ?? name
+    let keys = [RunContextWrapper.resolveApprovalKey(item)] + RunContextWrapper.resolveApprovalKeys(item) + [qualifiedKey]
+    let approvals = outerContext.approvals
+    let record = keys.lazy.compactMap { approvals[.name($0)] }.first
+    if approved {
+        try nestedContext.applyApproval(item, alwaysApprove: record?.approved == .all(true))
+    } else {
+        try nestedContext.applyRejection(
+            item,
+            alwaysReject: record?.rejected == .all(true),
+            rejectionMessage: outerContext.getRejectionMessage(
+                toolName: item.toolName ?? "", callId: callId, toolNamespace: namespace, existingPending: item
+            )
+        )
+    }
 }

@@ -265,8 +265,10 @@ func functionRejectionItem(
     toolCall: ResponseFunctionToolCall,
     rejectionMessage message: String = rejectionMessage,
     outputJSONSchema: JSONObject? = nil,
+    toolStateScope: AgentToolStateScope? = nil,
     toolOrigin: ToolOrigin? = nil
 ) throws -> ToolCallOutputItem {
+    dropAgentToolRunResult(toolCall.json, scope: toolStateScope)
     let providerOutput = functionToolErrorOutput(toolCall: toolCall.json, output: message, outputJSONSchema: outputJSONSchema)
     return ToolCallOutputItem(
         agent: agent,

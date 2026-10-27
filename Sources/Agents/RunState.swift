@@ -3,8 +3,8 @@ import Foundation
 // Port of src/agents/run_state.py. Serialization lives in RunStateSerialization.swift and
 // restoration in RunStateDeserialization.swift (porting/decisions.md D13).
 //
-// Swift: the canonical tool invocation ledger, agent-owned function approvals, nested agent-tool
-// states, pending session-write checkpoints, programmatic tool calling resume checks, and sandbox
+// Swift: nested agent-tool approval routing lives in RunStateNestedAgentTools.swift (D20).
+// Pending session-write checkpoints, programmatic tool calling resume checks, and sandbox
 // payloads are not ported yet; see porting/manifest.json.
 
 /// The resumable step stored in a `RunState`.
@@ -57,6 +57,8 @@ public final class RunState: @unchecked Sendable {
     var generatedPromptCacheKey: String?
     /// Schema version the snapshot was loaded from.
     var schemaVersion = RunState.currentSchemaVersion
+    /// The private cache scope for nested `Agent.asTool()` results of this run.
+    var agentToolStateScope: AgentToolStateScope?
 
     public init(
         context: RunContextWrapper,
@@ -75,6 +77,7 @@ public final class RunState: @unchecked Sendable {
         self.conversationId = conversationId
         self.previousResponseId = previousResponseId
         self.autoPreviousResponseId = autoPreviousResponseId
+        self.agentToolStateScope = getAgentToolStateScope(context)
     }
 
     /// The usage accumulated so far.
@@ -150,7 +153,11 @@ public final class RunState: @unchecked Sendable {
     ///
     /// For function tools, `alwaysApprove` applies only to the approval item's agent.
     public func approve(_ approvalItem: ToolApprovalItem, alwaysApprove: Bool = false) throws {
-        try context.approveTool(approvalItem, alwaysApprove: alwaysApprove)
+        if let (nestedState, nestedItem) = try findNestedApprovalState(approvalItem) {
+            try nestedState.approve(nestedItem, alwaysApprove: alwaysApprove)
+            return
+        }
+        try context.approveTool(try findCurrentApprovalItem(approvalItem) ?? approvalItem, alwaysApprove: alwaysApprove)
     }
 
     /// Rejects a tool call; rerun with this state to continue.
@@ -158,7 +165,13 @@ public final class RunState: @unchecked Sendable {
     /// When `rejectionMessage` is provided, that exact text is sent back to the model when the run
     /// resumes. Otherwise the run-level tool error formatter or the SDK default message is used.
     public func reject(_ approvalItem: ToolApprovalItem, alwaysReject: Bool = false, rejectionMessage: String? = nil) throws {
-        try context.rejectTool(approvalItem, alwaysReject: alwaysReject, rejectionMessage: rejectionMessage)
+        if let (nestedState, nestedItem) = try findNestedApprovalState(approvalItem) {
+            try nestedState.reject(nestedItem, alwaysReject: alwaysReject, rejectionMessage: rejectionMessage)
+            return
+        }
+        try context.rejectTool(
+            try findCurrentApprovalItem(approvalItem) ?? approvalItem, alwaysReject: alwaysReject, rejectionMessage: rejectionMessage
+        )
     }
 
     /// Captures trace metadata for serialization and resumption.

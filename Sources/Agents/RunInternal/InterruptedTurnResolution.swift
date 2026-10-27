@@ -4,14 +4,18 @@ import Foundation
 //
 // Swift: the resume path lives in its own file so TurnResolution.swift stays within SwiftLint's
 // length limits (porting/decisions.md D19). Upstream keeps its state in closures; Swift keeps it
-// in `InterruptedTurnResolver`. Not ported yet: the `response_accepted` fast path, nested
-// `Agent.asTool()` run state (`agent_tool_state.py`), and programmatic tool calling parents.
+// in `InterruptedTurnResolver`. Nested `Agent.asTool()` results are keyed by tool call signature
+// rather than object identity (D20). Not ported yet: the `response_accepted` fast path and
+// programmatic tool calling parents.
 // Sandbox execution clones are out of scope (D2), so the public and execution agents are the same.
 
 /// Resumes a turn that was interrupted for tool approvals.
+///
+/// Pass `allTools: nil` to execute with the tool inventory the reconciliation loads, which happens
+/// only after the interrupted calls are validated.
 func resolveInterruptedTurn(
     agent: Agent,
-    allTools: [any Tool],
+    allTools: [any Tool]?,
     originalInput: RunInput,
     originalPreStepItems: [RunItem],
     newResponse: ModelResponse,
@@ -128,7 +132,8 @@ private final class ResumeCheckpoint: @unchecked Sendable {
 /// The state of one resumed turn (upstream keeps it in the closures of `resolve_interrupted_turn`).
 private final class InterruptedTurnResolver {
     let agent: Agent
-    let allTools: [any Tool]
+    let allTools: [any Tool]?
+    var currentToolInventory: [any Tool] = []
     let originalInput: RunInput
     let originalPreStepItems: [RunItem]
     let newResponse: ModelResponse
@@ -174,9 +179,19 @@ private final class InterruptedTurnResolver {
     var missingFunctionTools: [ToolRunFunctionNotFound] = []
     var missingFunctionCallIds: Set<String> = []
 
+    let toolStateScope: AgentToolStateScope?
+    /// Function calls whose nested agent-tool run has new decisions, so their prior output is replaced.
+    var rerunFunctionCallIds: Set<String> = []
+    var staleFunctions: [String: ToolRunFunction] = [:]
+    /// Nested results of the queued function calls, captured before reconciliation.
+    var stableFunctionNestedResults: [AgentToolCallSignature: AgentToolRunRecord] = [:]
+    var pendingNestedTransfers: [(call: JSONObject, record: AgentToolRunRecord)] = []
+    var pendingNestedDrops: [JSONObject] = []
+    var missingStateCalls: [JSONObject] = []
+
     init(
         agent: Agent,
-        allTools: [any Tool],
+        allTools: [any Tool]?,
         originalInput: RunInput,
         originalPreStepItems: [RunItem],
         newResponse: ModelResponse,
@@ -199,6 +214,7 @@ private final class InterruptedTurnResolver {
         self.serverManagesConversation = serverManagesConversation
         self.runState = runState
         self.outputIndex = buildToolOutputIndex(originalPreStepItems)
+        self.toolStateScope = getAgentToolStateScope(contextWrapper)
     }
 
     func hasOutputItem(_ callId: String, _ expectedType: String) -> Bool {
@@ -267,7 +283,8 @@ private final class InterruptedTurnResolver {
         approvalItemsByCallId = indexApprovalItemsByCallId(pendingApprovalItems.filter(approvalMatchesAgent))
 
         try dedupeProcessedResponseInvocations(
-            &processed, contextWrapper: contextWrapper, existingItems: originalPreStepItems, filterCompleted: false
+            &processed, contextWrapper: contextWrapper, existingItems: originalPreStepItems,
+            deferredFunctionCalls: try validateDeferredNestedBindings(), filterCompleted: false
         )
         indexQueuedCalls()
         if let malformed = try validateFunctionApprovals() {
@@ -287,8 +304,15 @@ private final class InterruptedTurnResolver {
         let missingOutputItems = try await buildToolNotFoundOutputItems(
             agent: agent, calls: missingFunctionTools, contextWrapper: contextWrapper, runConfig: runConfig
         )
+        for (call, record) in pendingNestedTransfers {
+            recordAgentToolRunResult(call, record, scope: toolStateScope)
+        }
         processed.functions = reconciledFunctions
         processed.functionToolsNotFound = missingFunctionTools
+        var droppedNestedCalls: Set<AgentToolCallSignature> = []
+        for call in pendingNestedDrops where droppedNestedCalls.insert(AgentToolCallSignature(call)).inserted {
+            dropStableNestedResult(call)
+        }
 
         return try await executeAndFinish(
             plan: plan,
@@ -296,6 +320,114 @@ private final class InterruptedTurnResolver {
             missingOutputItems: missingOutputItems,
             rejectedCustomApprovalOutputs: rejectedCustomApprovalOutputs
         )
+    }
+}
+
+// MARK: - Nested agent-tool results
+
+extension InterruptedTurnResolver {
+    /// Validates the bindings of calls whose nested agent-tool run is interrupted. Their
+    /// de-duplication skips binding validation, so a changed parent call fails here instead.
+    func validateDeferredNestedBindings() throws -> Set<AgentToolCallSignature> {
+        var deferred: Set<AgentToolCallSignature> = []
+        for run in processed.functions {
+            guard let nested = peekAgentToolRunResult(run.toolCall.json, scope: toolStateScope),
+                  !nested.interruptions.isEmpty || getAgentToolResumeState(nested) != nil else { continue }
+            deferred.insert(AgentToolCallSignature(run.toolCall.json))
+        }
+        for run in processed.functions where deferred.contains(AgentToolCallSignature(run.toolCall.json)) {
+            let currentLookupKey = getFunctionToolLookupKeyForTool(run.functionTool)
+            let persistedLookupKey: FunctionToolLookupKey?
+            if let approval = approvalItemsByCallId[run.toolCall.callId] {
+                persistedLookupKey = approvalPersistedLookupKey(approval)
+            } else {
+                persistedLookupKey = currentLookupKey
+            }
+            // Preserve the more specific interrupted Agent.as_tool() replacement error.
+            guard persistedLookupKey == currentLookupKey else { continue }
+            try contextWrapper.approvedToolInvocationStatus(run.toolCall.json, toolLookupKey: persistedLookupKey)
+        }
+        return deferred
+    }
+
+    func cachedNestedResult(_ run: ToolRunFunction) -> AgentToolRunRecord? {
+        stableFunctionNestedResults[AgentToolCallSignature(run.toolCall.json)]
+            ?? peekAgentToolRunResult(run.toolCall.json, scope: toolStateScope)
+    }
+
+    func pendingNestedResult(_ run: ToolRunFunction) -> AgentToolRunRecord? {
+        guard let result = cachedNestedResult(run), !result.interruptions.isEmpty else { return nil }
+        return result
+    }
+
+    func dropStableNestedResult(_ call: JSONObject) {
+        stableFunctionNestedResults.removeValue(forKey: AgentToolCallSignature(call))
+        dropAgentToolRunResult(call, scope: toolStateScope)
+    }
+
+    func rejectNestedReplacement(_ run: ToolRunFunction) throws {
+        guard pendingNestedResult(run) != nil else {
+            pendingNestedDrops.append(run.toolCall.json)
+            return
+        }
+        let qualifiedName = getToolCallQualifiedName(run.toolCall.json) ?? run.toolCall.name
+        throw ModelBehaviorError(
+            "Cannot reconcile queued tool \(qualifiedName) with a new tool or handoff while "
+                + "its Agent.as_tool() run is interrupted. Restore the original tool configuration "
+                + "or start a new run."
+        )
+    }
+
+    /// Moves a pending nested run from the stale call to the call that now owns it.
+    ///
+    /// Swift: entries are keyed by signature (D20), so a current call with the stale call's
+    /// signature already owns the entry and needs no transfer.
+    func rebindFunctionRun(_ staleRun: ToolRunFunction?, _ currentRun: ToolRunFunction) throws -> ToolRunFunction {
+        guard let staleRun else { return currentRun }
+        let cachedResult = cachedNestedResult(staleRun)
+        let pendingResult = pendingNestedResult(staleRun)
+        if staleRun.functionTool !== currentRun.functionTool {
+            let staleOwner = staleRun.functionTool.agentInstance
+            let currentOwner = currentRun.functionTool.agentInstance
+            if pendingResult != nil, staleOwner == nil || staleOwner !== currentOwner {
+                try rejectNestedReplacement(staleRun)
+            }
+            if cachedResult != nil, pendingResult == nil {
+                pendingNestedDrops.append(staleRun.toolCall.json)
+            }
+        }
+        if let pendingResult, AgentToolCallSignature(currentRun.toolCall.json) != AgentToolCallSignature(staleRun.toolCall.json) {
+            pendingNestedTransfers.append((currentRun.toolCall.json, pendingResult))
+            pendingNestedDrops.append(staleRun.toolCall.json)
+        }
+        return currentRun
+    }
+
+    /// Reads the decisions recorded for a nested run's approvals (upstream
+    /// `_nested_interruptions_status`).
+    func nestedInterruptionsStatus(_ nestedResult: AgentToolRunRecord) throws -> AgentToolNestedApprovalsStatus {
+        let nestedState = nestedResult.toState()
+        var hasPending = false
+        for interruption in nestedResult.interruptions {
+            let (decisionState, decisionItem) = try nestedState.findNestedApprovalState(interruption) ?? (nestedState, interruption)
+            guard let callId = getToolApprovalItemCallId(decisionItem) else {
+                hasPending = true
+                continue
+            }
+            var status = try decisionState.context.getApprovalStatus(
+                toolName: decisionItem.toolName ?? "", callId: callId, toolNamespace: decisionItem.toolNamespace,
+                existingPending: decisionItem
+            )
+            if status == nil, contextWrapper.allowLegacyApprovalBindingReconstruction {
+                status = try contextWrapper.getApprovalStatus(
+                    toolName: decisionItem.toolName ?? "", callId: callId, toolNamespace: decisionItem.toolNamespace,
+                    existingPending: decisionItem
+                )
+            }
+            if status == false { return .rejected }
+            if status == nil { hasPending = true }
+        }
+        return hasPending ? .pending : .approved
     }
 }
 
@@ -317,6 +449,11 @@ extension InterruptedTurnResolver {
             if let callId = item.callIdOrId { counts[callId, default: 0] += 1 }
         }
         duplicateQueuedCallIds = Set(counts.filter { $0.value > 1 }.keys)
+        for run in processed.functions where !duplicateQueuedCallIds.contains(run.toolCall.callId) {
+            if let nested = peekAgentToolRunResult(run.toolCall.json, scope: toolStateScope) {
+                stableFunctionNestedResults[AgentToolCallSignature(run.toolCall.json)] = nested
+            }
+        }
         let nonFunctionItems: [JSONObject] = processed.computerActions.map(\.toolCall.json)
             + processed.customToolCalls.map(\.toolCall.json)
             + processed.localShellCalls.map(\.toolCall.json)
@@ -556,9 +693,9 @@ extension InterruptedTurnResolver {
         let callId = call.callId
         guard !duplicateQueuedCallIds.contains(callId), !reconciledCallIds.contains(callId),
               !executedHandoffCallIds.contains(callId) else { return }
-        // Swift: upstream keeps a call whose output exists while its nested `Agent.asTool()` run is
-        // still interrupted; nested agent-tool state is not ported yet.
-        if hasOutputItem(callId, "function_call_output") { return }
+        // A call whose nested `Agent.asTool()` run is still interrupted stays reconcilable.
+        let nestedResult = staleFunctions[callId].flatMap { peekAgentToolRunResult($0.toolCall.json, scope: toolStateScope) }
+        if hasOutputItem(callId, "function_call_output"), nestedResult?.interruptions.isEmpty ?? true { return }
         var call = call
         if let queued = canonicalQueuedFunctionCalls[callId] {
             call = queued
@@ -572,7 +709,7 @@ extension InterruptedTurnResolver {
     /// Re-classifies every interrupted call against the current tool inventory.
     func classifyReconciledCalls() async throws -> ProcessedResponse {
         let availableHandoffs = try await getHandoffs(agent, contextWrapper)
-        let currentToolInventory = try await agent.getAllTools(contextWrapper)
+        currentToolInventory = try await agent.getAllTools(contextWrapper)
         let (resolvedTools, resolvedHandoffs) = try resolveToolNameCollisions(
             currentToolInventory, handoffs: availableHandoffs, collisionPolicy: runConfig.toolNameCollisionPolicy
         )
@@ -581,6 +718,10 @@ extension InterruptedTurnResolver {
         availableFunctionTools = resolvedFunctionTools.filter { localFunctionToolIds.contains(ObjectIdentifier($0)) }
 
         executedHandoffCallIds = Set(originalPreStepItems.compactMap { ($0 as? HandoffOutputItem)?.rawItem.callIdOrId })
+        staleFunctions = Dictionary(
+            processed.functions.filter { !duplicateQueuedCallIds.contains($0.toolCall.callId) }.map { ($0.toolCall.callId, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
         for call in authoritativeResponseFunctionCalls { appendReconciliationCall(call) }
         for run in processed.functions { appendReconciliationCall(run.toolCall) }
         for run in processed.handoffs { appendReconciliationCall(run.toolCall) }
@@ -618,17 +759,14 @@ extension InterruptedTurnResolver {
             toolLookupKey: approvalRecord.toolLookupKey, existingPending: approvalRecord
         )
         rejectedFunctionOutputs.append(try functionRejectionItem(
-            agent: agent, toolCall: rejectionCall, rejectionMessage: message, toolOrigin: approvalRecord.toolOrigin
+            agent: agent, toolCall: rejectionCall, rejectionMessage: message, toolStateScope: toolStateScope,
+            toolOrigin: approvalRecord.toolOrigin
         ))
         rejectedFunctionCallIds.insert(callId)
     }
 
     /// Rebinds each interrupted call to the tool or handoff that currently owns it.
     func reconcileCalls(_ classified: ProcessedResponse) async throws -> ([ToolRunFunction], [ToolRunHandoff]) {
-        let staleFunctions = Dictionary(
-            processed.functions.filter { !duplicateQueuedCallIds.contains($0.toolCall.callId) }.map { ($0.toolCall.callId, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
         let currentFunctions = Dictionary(classified.functions.map { ($0.toolCall.callId, $0) }, uniquingKeysWith: { first, _ in first })
         let currentHandoffs = Dictionary(classified.handoffs.map { ($0.toolCall.callId, $0) }, uniquingKeysWith: { first, _ in first })
         let currentMissing = Dictionary(classified.functionToolsNotFound.map { ($0.toolCall.callId, $0) }, uniquingKeysWith: { first, _ in first })
@@ -662,7 +800,7 @@ extension InterruptedTurnResolver {
                             + "Restore the original MCP server configuration and tool listing, or start a new run."
                     )
                 }
-                reconciledFunctions.append(currentFunction)
+                reconciledFunctions.append(try rebindFunctionRun(staleFunction, currentFunction))
                 continue
             }
 
@@ -681,6 +819,7 @@ extension InterruptedTurnResolver {
                 if originalBinding != nil {
                     throw UserError("Cannot resume a local MCP tool call as a handoff. Restore the original tool configuration, or start a new run.")
                 }
+                if let staleFunction { try rejectNestedReplacement(staleFunction) }
                 reconciledHandoffs.append(currentHandoff)
                 continue
             }
@@ -689,6 +828,20 @@ extension InterruptedTurnResolver {
                 if runConfig.toolNotFoundBehavior != .returnErrorToModel {
                     let qualifiedName = getToolCallQualifiedName(missing.toolCall.json) ?? missing.toolName
                     throw ModelBehaviorError("Tool \(qualifiedName) not found in agent \(agent.name)")
+                }
+                let cachedResult: AgentToolRunRecord?
+                if let staleFunction {
+                    cachedResult = cachedNestedResult(staleFunction)
+                } else {
+                    cachedResult = peekAgentToolRunResult(missing.toolCall.json, scope: toolStateScope)
+                }
+                if cachedResult != nil {
+                    var stateCall = missing.toolCall.json
+                    if let staleFunction {
+                        reconciledFunctions.append(staleFunction)
+                        stateCall = staleFunction.toolCall.json
+                    }
+                    missingStateCalls.append(stateCall)
                 }
                 missingFunctionCallIds.insert(callId)
                 missingFunctionTools.append(missing)
@@ -708,6 +861,23 @@ extension InterruptedTurnResolver {
         return (reconciledFunctions, reconciledHandoffs)
     }
 
+    /// Keeps a surfaced nested approval pending until its nested run has a decision.
+    private func collectNestedPendingApproval(_ original: ToolApprovalItem) throws {
+        guard let (nestedState, nestedItem) = try runState?.findNestedApprovalState(original) else {
+            if stableFunctionNestedResults.values.contains(where: { agentToolResumeCheckpointOwnsApproval($0, original) }) {
+                return
+            }
+            addPendingInterruption(original)
+            return
+        }
+        let status = try getToolApprovalItemCallId(nestedItem).flatMap {
+            try nestedState.context.getApprovalStatus(
+                toolName: nestedItem.toolName ?? "", callId: $0, toolNamespace: nestedItem.toolNamespace, existingPending: nestedItem
+            )
+        }
+        if status == nil { addPendingInterruption(original) }
+    }
+
     /// Keeps approvals the reconciliation did not resolve as pending interruptions.
     func collectUnreconciledPendingApprovals() throws {
         let collectorOwnedCallIds = Set(
@@ -718,9 +888,7 @@ extension InterruptedTurnResolver {
         )
         for original in pendingApprovalItems {
             guard approvalMatchesAgent(original) else {
-                // Swift: upstream first routes the approval to a nested `Agent.asTool()` run state;
-                // nested agent-tool state is not ported yet, so it stays pending.
-                addPendingInterruption(original)
+                try collectNestedPendingApproval(original)
                 continue
             }
             guard let snapshot = validatedFunctionApprovals[ObjectIdentifier(original)] else {
@@ -772,6 +940,13 @@ extension InterruptedTurnResolver {
         let callId = run.toolCall.callId
         guard !callId.isEmpty else { return false }
         if approvalItemsByCallId[callId] == nil, hasOutputItem(callId, "function_call_output") { return true }
+        if let pendingResult = peekAgentToolRunResult(run.toolCall.json, scope: toolStateScope), !pendingResult.interruptions.isEmpty {
+            guard try nestedInterruptionsStatus(pendingResult) == .pending else {
+                rerunFunctionCallIds.insert(callId)
+                return false
+            }
+            return true
+        }
         let binding = try contextWrapper.approvedToolInvocationStatus(
             run.toolCall.json, toolLookupKey: getFunctionToolLookupKeyForTool(run.functionTool)
         )
@@ -796,7 +971,7 @@ extension InterruptedTurnResolver {
         }
         rejectedFunctionOutputs.append(try functionRejectionItem(
             agent: agent, toolCall: toolCall, rejectionMessage: message, outputJSONSchema: functionTool.outputJSONSchema,
-            toolOrigin: approvalRecord.map(\.toolOrigin) ?? getFunctionToolOrigin(functionTool)
+            toolStateScope: toolStateScope, toolOrigin: approvalRecord.map(\.toolOrigin) ?? getFunctionToolOrigin(functionTool)
         ))
         if let callId { rejectedFunctionCallIds.insert(callId) }
     }
@@ -989,7 +1164,7 @@ extension InterruptedTurnResolver {
             runState: runState, originalPreStepItems: originalPreStepItems, callPositions: positions, contextWrapper: contextWrapper
         )
         let results = try await executeToolPlan(
-            plan: resumePlan.plan, agent: agent, allTools: allTools, hooks: hooks, contextWrapper: contextWrapper,
+            plan: resumePlan.plan, agent: agent, allTools: allTools ?? currentToolInventory, hooks: hooks, contextWrapper: contextWrapper,
             runConfig: runConfig, toolOutputCommitter: checkpoint.commitToolOutput
         )
         results.interruptions.forEach(addPendingInterruption)
@@ -1014,6 +1189,7 @@ extension InterruptedTurnResolver {
             if !missingFunctionCallIds.isEmpty {
                 processed.functions = processed.functions.filter { !missingFunctionCallIds.contains($0.toolCall.callId) }
             }
+            missingStateCalls.forEach(dropStableNestedResult)
             return result
         }
 
@@ -1044,6 +1220,11 @@ extension InterruptedTurnResolver {
         if !rejectedFunctionCallIds.isEmpty {
             preStepItems = preStepItems.filter {
                 !($0 is ToolCallOutputItem && $0.rawItem.callIdOrId.map(rejectedFunctionCallIds.contains) == true)
+            }
+        }
+        if !rerunFunctionCallIds.isEmpty {
+            preStepItems = preStepItems.filter {
+                !($0 is ToolCallOutputItem && $0.rawItem.callIdOrId.map(rerunFunctionCallIds.contains) == true)
             }
         }
         let newItems = appender.items

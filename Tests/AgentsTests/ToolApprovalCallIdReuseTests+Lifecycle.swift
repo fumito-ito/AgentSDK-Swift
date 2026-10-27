@@ -634,4 +634,94 @@ extension ToolApprovalCallIdReuseTests {
         let modelInput = try #require(model.calls.last?.input.inputItems)
         #expect(modelInput.filter { $0.string("type") == "function_call_output" }.compactMap { $0.string("call_id") } == ["call_first", "call_second"])
     }
+
+    // MARK: - Nested agent tools
+
+    @Test(arguments: [false, true])
+    func testNestedAgentToolApprovalAllowsOuterCallIdCollision(roundTrip: Bool) async throws {
+        let executed = SharedBox<[String]>([])
+        let innerSensitiveTool = try FunctionTool.create(name: "inner_sensitive_tool", argumentsType: ValueArgs.self, needsApproval: .always) { _, args in
+            executed.mutate { $0.append(args.value) }
+            return args.value
+        }
+        let innerModel = try ScriptedModel(steps: [
+            .output([getFunctionToolCall("inner_sensitive_tool", arguments: #"{"value":"safe"}"#, callId: "shared")]),
+        ])
+        try innerModel.enqueue(.output([getTextMessage("inner done")]))
+        let innerAgent = Agent(name: "inner", tools: [innerSensitiveTool], model: .instance(innerModel))
+        let outerModel = try ScriptedModel(steps: [
+            .output([getFunctionToolCall("nested_agent", arguments: #"{"input":"hello"}"#, callId: "shared")]),
+        ])
+        try outerModel.enqueue(.output([getTextMessage("outer done")]))
+        let outerAgent = Agent(
+            name: "outer",
+            tools: [try innerAgent.asTool(toolName: "nested_agent", toolDescription: "Run the nested agent.")],
+            model: .instance(outerModel)
+        )
+
+        let interrupted = try await Runner.run(outerAgent, input: "start")
+        #expect(interrupted.interruptions.count == 1)
+
+        var state = interrupted.toState()
+        if roundTrip {
+            state = try await RunState.fromJSON(outerAgent, try state.toJSON())
+        }
+        try state.approve(try #require(state.getInterruptions().first))
+        let resumed = try await Runner.run(outerAgent, state: state)
+
+        #expect(resumed.finalOutput as? String == "outer done")
+        #expect(resumed.interruptions.isEmpty)
+        #expect(executed.value == ["safe"])
+    }
+
+    @Test(arguments: [false, true])
+    func testParentApprovalDoesNotAuthorizeIndependentNestedRun(roundTrip: Bool) async throws {
+        let executed = SharedBox<[String]>([])
+        let sensitive = try FunctionTool.create(name: "sensitive", argumentsType: ValueArgs.self, needsApproval: .always) { _, args in
+            executed.mutate { $0.append(args.value) }
+            return args.value
+        }
+        let innerModel = try ScriptedModel()
+        try innerModel.extend([
+            .output([getFunctionToolCall("sensitive", arguments: #"{"value":"same"}"#, callId: "shared")]),
+            .output([getTextMessage("inner done")]),
+        ])
+        let innerAgent = Agent(name: "inner", tools: [sensitive], model: .instance(innerModel))
+        let outerModel = try ScriptedModel()
+        try outerModel.extend([
+            .output([getFunctionToolCall("sensitive", arguments: #"{"value":"same"}"#, callId: "shared")]),
+            .output([getFunctionToolCall("nested_agent", arguments: #"{"input":"hello"}"#, callId: "outer-nested")]),
+            .output([getTextMessage("outer done")]),
+        ])
+        let outerAgent = Agent(
+            name: "outer",
+            tools: [sensitive, try innerAgent.asTool(toolName: "nested_agent", toolDescription: "Run the nested agent.")],
+            model: .instance(outerModel)
+        )
+
+        let parentInterruption = try await Runner.run(outerAgent, input: "start")
+        let parentState = parentInterruption.toState()
+        try parentState.approve(try #require(parentState.getInterruptions().first))
+        let nestedInterruption = try await Runner.run(outerAgent, state: parentState)
+
+        #expect(nestedInterruption.interruptions.count == 1)
+        #expect(executed.value == ["same"])
+
+        var nestedState = nestedInterruption.toState()
+        if roundTrip {
+            nestedState = try await RunState.fromJSON(outerAgent, try nestedState.toJSON())
+        }
+        let stillPending = try await Runner.run(outerAgent, state: nestedState)
+
+        #expect(stillPending.interruptions.count == 1)
+        #expect(executed.value == ["same"])
+
+        let approvedState = stillPending.toState()
+        try approvedState.approve(try #require(approvedState.getInterruptions().first))
+        let completed = try await Runner.run(outerAgent, state: approvedState)
+
+        #expect(completed.finalOutput as? String == "outer done")
+        #expect(completed.interruptions.isEmpty)
+        #expect(executed.value == ["same", "same"])
+    }
 }

@@ -77,11 +77,96 @@ public final class ToolContext: RunContextWrapper, @unchecked Sendable {
             turnInput: wrapper.turnInput,
             toolInput: wrapper.toolInput
         )
+        agentToolStateScope = wrapper.agentToolStateScope
+    }
+
+    /// Creates the context of a nested `Agent.asTool()` run: it shares usage with `context` but
+    /// keeps its own approvals, so a nested run does not inherit decisions from its parent.
+    init(isolatingApprovalsFrom context: ToolContext, runConfig: RunConfig?) {
+        self.toolName = context.toolName
+        self.toolCallId = context.toolCallId
+        self.toolArguments = context.toolArguments
+        self.toolCall = context.toolCall
+        self.toolNamespace = context.toolNamespace
+        self.agent = context.agent
+        self.runConfig = runConfig
+        super.init(
+            context: context.context,
+            usageBox: context.usageBox,
+            toolStateBox: SharedBox(ToolApprovalState()),
+            turnInput: [],
+            toolInput: nil
+        )
     }
 
     /// The tool name qualified by namespace when available.
     public var qualifiedToolName: String {
         toolTraceName(toolName, namespace: toolNamespace) ?? toolName
+    }
+
+    // MARK: - Nested approvals
+
+    /// Finds a pending nested agent-tool context that owns an approval item.
+    func findNestedApprovalTarget(_ approvalItem: ToolApprovalItem) throws -> (RunContextWrapper, ToolApprovalItem)? {
+        guard let toolCall, let pendingResult = peekAgentToolRunResult(toolCall, scope: agentToolStateScope) else { return nil }
+        let nestedContext = pendingResult.toState().context
+        guard nestedContext !== self else { return nil }
+
+        let targetIdentity = toolInvocationIdentity(
+            approvalItem.rawItem, toolLookupKey: approvalItem.toolLookupKey, toolName: approvalItem.toolName
+        )
+        var currentContextOwnsApproval = false
+        if let targetIdentity, let record = toolInvocations[targetIdentity.callId] {
+            currentContextOwnsApproval = !record.completed && record.matches(targetIdentity)
+        }
+
+        var exactMatch: ToolApprovalItem?
+        var canonicalMatches: [ToolApprovalItem] = []
+        for candidate in pendingResult.interruptions {
+            if candidate === approvalItem {
+                exactMatch = candidate
+                continue
+            }
+            let candidateIdentity = toolInvocationIdentity(
+                candidate.rawItem, toolLookupKey: candidate.toolLookupKey, toolName: candidate.toolName
+            )
+            if let targetIdentity, candidateIdentity == targetIdentity {
+                canonicalMatches.append(candidate)
+            }
+        }
+        if currentContextOwnsApproval, exactMatch != nil || !canonicalMatches.isEmpty {
+            throw UserError(
+                "Cannot apply approval because the same tool invocation identity belongs to both "
+                    + "the current run and a nested agent-tool run."
+            )
+        }
+        if let exactMatch { return (nestedContext, exactMatch) }
+        if canonicalMatches.count == 1 { return (nestedContext, canonicalMatches[0]) }
+        if canonicalMatches.count > 1 {
+            throw UserError(
+                "Cannot apply approval because multiple nested agent-tool calls contain the same "
+                    + "tool invocation identity. Use distinct call IDs."
+            )
+        }
+        return nil
+    }
+
+    /// Approves this context's call or routes a surfaced nested approval to its owner.
+    override public func approveTool(_ approvalItem: ToolApprovalItem, alwaysApprove: Bool = false) throws {
+        guard let (nestedContext, nestedItem) = try findNestedApprovalTarget(approvalItem) else {
+            try applyApproval(approvalItem, alwaysApprove: alwaysApprove)
+            return
+        }
+        try nestedContext.applyApproval(nestedItem, alwaysApprove: alwaysApprove)
+    }
+
+    /// Rejects this context's call or routes a surfaced nested rejection to its owner.
+    override public func rejectTool(_ approvalItem: ToolApprovalItem, alwaysReject: Bool = false, rejectionMessage: String? = nil) throws {
+        guard let (nestedContext, nestedItem) = try findNestedApprovalTarget(approvalItem) else {
+            try applyRejection(approvalItem, alwaysReject: alwaysReject, rejectionMessage: rejectionMessage)
+            return
+        }
+        try nestedContext.applyRejection(nestedItem, alwaysReject: alwaysReject, rejectionMessage: rejectionMessage)
     }
 
     /// Creates a `ToolContext` that shares usage and approvals with `context`.
